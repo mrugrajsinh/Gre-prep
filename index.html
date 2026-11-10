@@ -363,7 +363,7 @@ function renderStatus(){
   if(S.setup){s.append(el('div',{class:'banner',text:'Paste your Firebase config into FIREBASE_CONFIG at the top of the script in index.html.'}));return;}
   if(S.signin){s.append(el('div',{class:'banner'},el('p',{style:'margin:0 0 8px',text:'Sign in to load and save your data.'}),el('button',{class:'btn',type:'button',onclick:function(){firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(e){toast('Sign-in failed: '+(e&&e.code||'error'));});}},'Sign in with Google')));return;}
   if(!S.db){s.append(el('div',{class:'banner',text:'Connecting...'}));return;}
-  if(S.err){s.append(el('div',{class:'banner',text:'Your data could not be loaded ('+S.err+'). Reload the page.'}));return;}
+  if(S.err){var u=S.user;s.append(el('div',{class:'banner'},el('p',{style:'margin:0 0 6px',text:'Your data could not be loaded ('+S.err+').'}),u?el('p',{style:'margin:0 0 6px;overflow-wrap:anywhere',text:'Signed in as '+(u.email||'unknown')+'. UID: '+u.uid}):null,u?el('button',{class:'btn small',type:'button',onclick:function(){firebase.auth().signOut().then(function(){location.reload();});}},'Sign out and try another account'):null));return;}
   var need=['words','articles','verbal','quant','daily','bank'].some(function(k){return !S.ready[k];});
   if(need&&S.timedOut)s.append(el('div',{class:'banner',text:'Still waiting for your saved data. What you see may be out of date.'}));
 }
@@ -687,7 +687,7 @@ async function connect(){
   firebase.initializeApp(FIREBASE_CONFIG);
   firebase.auth().onAuthStateChanged(function(u){
     if(!u){S.db=null;S.signin=true;render();return;}
-    S.signin=false;
+    S.signin=false;S.user=u;
     if(started){render();return;}
     started=true;start(firebase.firestore());
   });
