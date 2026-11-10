@@ -82,6 +82,12 @@ details summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--accent
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:20;max-width:90vw}
 .banner{border-radius:8px;padding:10px 12px;background:var(--warn-bg);color:var(--warn);font-size:14px}
 section[hidden]{display:none}
+.flashcard{min-height:280px;border-radius:14px;background:var(--accent-soft);border:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px;gap:10px;cursor:pointer;min-width:0}
+.flashcard .w{font:700 38px var(--font-head);overflow-wrap:anywhere}
+.flashcard .m{font-size:19px}
+.flashcard .h{color:var(--muted);overflow-wrap:anywhere}
+.btn.big{flex:1;padding:14px 10px;font-size:16px}
+input[type=range]{padding:0;border:0;background:transparent}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @media (max-width:480px){.barrow{grid-template-columns:90px 1fr 30px}}
 body{margin:0}img{max-width:100%}[hidden]{display:none!important}
@@ -99,6 +105,10 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
   <section id="s-today">
     <div id="todayBody" class="wrap" style="gap:14px"></div>
     <div id="review" class="card" hidden></div>
+  </section>
+
+  <section id="s-cards" hidden class="wrap" style="gap:14px">
+    <div id="cardsBody" class="wrap" style="gap:14px"></div>
   </section>
 
   <section id="s-words" hidden class="wrap" style="gap:14px">
@@ -264,7 +274,7 @@ var REASON_TIPS={
 };
 var INT=[3,3,3];
 var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Article: 1 reviewed and rated'],['t','TC/SC: 2 to 3 sets done']];
-var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map()};
+var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',deck:'g',size:50,start:null,shuffle:false}};
 function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
 function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
 
@@ -351,8 +361,9 @@ function schedule(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;ren
 function render(){
   $('#dateline').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   renderStatus();renderTabs();
-  ['today','words','articles','verbal','quant'].forEach(function(t){$('#s-'+t).hidden=(t!==S.tab);});
+  ['today','cards','words','articles','verbal','quant'].forEach(function(t){$('#s-'+t).hidden=(t!==S.tab);});
   if(S.tab==='today')renderToday();
+  if(S.tab==='cards')renderCards();
   if(S.tab==='words')renderWords();
   if(S.tab==='articles')renderArticles();
   if(S.tab==='verbal')renderVerbal();
@@ -370,7 +381,7 @@ function renderStatus(){
 function renderTabs(){
   var nav=$('#tabs');nav.textContent='';
   var due=S.db?dueWords().length:0;
-  [['today','Today'],['words','Words'],['articles','Articles'],['verbal','TC/SC'],['quant','Quant']].forEach(function(t){
+  [['today','Today'],['cards','Cards'],['words','Words'],['articles','Articles'],['verbal','TC/SC'],['quant','Quant']].forEach(function(t){
     var b=el('button',{type:'button','aria-current':S.tab===t[0]?'true':'false',onclick:function(){go(t[0]);}},t[1]);
     if(t[0]==='words'&&due>0)b.append(el('span',{class:'badge',text:due}));
     nav.append(b);
@@ -393,7 +404,7 @@ function renderToday(){
       el('div',null,el('div',{class:'big',text:due.length}),el('div',{class:'muted small',text:due.length===1?'word is due today':'words are due today'})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return !w.mastered;}).length}),el('div',{class:'muted small',text:'weak words in rotation'})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return w.mastered;}).length}),el('div',{class:'muted small',text:'mastered'}))),
-    el('div',null,el('button',{class:'btn',type:'button',disabled:due.length===0,onclick:startReview},due.length?'Start review':'Nothing due'))
+    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Revise words'),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:startReview},due.length?'Review due words':'Nothing due'))
   ));
 
   var list=el('div',null);
@@ -586,6 +597,92 @@ function renderQuant(){
   });
 }
 
+/* ---------- flashcards ---------- */
+function deckWords(d){var out=[];S.fileBank.forEach(function(x){if(d==='a'||x.src==='Gregmat')out.push(x);});return out;}
+function cdSaved(d){var m=S.meta.vocabpos||{};return parseInt(m[d],10)||0;}
+function cdPersist(){
+  var c=S.cd;if(c.stage!=='run'&&c.stage!=='done')return;
+  var pos=c.startIdx+(c.stage==='done'?c.list.length:c.i);
+  var o=Object.assign({},S.meta.vocabpos||{});
+  if(pos>(parseInt(o[c.deck],10)||0)){o[c.deck]=pos;S.meta.vocabpos=o;save('meta','vocabpos',o);}
+}
+function speakWord(w){try{var u=new SpeechSynthesisUtterance(w);u.lang='en-US';window.speechSynthesis.cancel();window.speechSynthesis.speak(u);}catch(e){}}
+function cdStart(){
+  var c=S.cd,all=deckWords(c.deck);
+  var s=Math.max(0,Math.min(all.length-1,(c.start==null?cdSaved(c.deck)+1:c.start)-1));
+  var n=Math.max(1,Math.min(200,c.size||50));
+  var list=all.slice(s,s+n);
+  if(c.shuffle)list=shuffle(list);
+  if(!list.length){toast('No words at that position.');return;}
+  S.cd={stage:'run',deck:c.deck,size:n,shuffle:c.shuffle,list:list,i:0,knew:0,red:[],flip:false,startIdx:s,total:all.length,start:null};
+}
+function cdNext(){
+  var c=S.cd;c.i++;c.flip=false;
+  if(c.i>=c.list.length){c.stage='done';cdPersist();}else if(c.i%10===0){cdPersist();}
+  renderCards();
+}
+function cdAnswer(ok){
+  var c=S.cd,x=c.list[c.i];
+  if(ok){c.knew++;}
+  else{c.red.push(x.w);addWord(x.w,x.m||'','','',x.src||'');}
+  cdNext();
+}
+function renderCards(){
+  var box=$('#cardsBody');if(!box)return;box.textContent='';
+  var c=S.cd;
+  if(!S.fileBank.size){box.append(el('div',{class:'card muted',text:'Loading your word bank...'}));return;}
+  if(c.stage==='setup'){
+    var all=deckWords(c.deck),saved=cdSaved(c.deck);
+    var sel=el('select',{id:'cdDeck','aria-label':'Word set',onchange:function(){c.deck=this.value;c.start=null;renderCards();}},
+      el('option',{value:'g',selected:c.deck==='g'?true:null},'Gregmat words ('+deckWords('g').length+')'),
+      el('option',{value:'a',selected:c.deck==='a'?true:null},'All words with extras ('+deckWords('a').length+')'));
+    var st=el('input',{type:'number',id:'cdStart',min:'1',max:String(all.length),value:String(c.start==null?saved+1:c.start),oninput:function(){c.start=parseInt(this.value,10)||1;}});
+    var sz=el('input',{type:'number',id:'cdSize',min:'1',max:'200',value:String(c.size),oninput:function(){c.size=parseInt(this.value,10)||50;}});
+    var sh=el('input',{type:'checkbox',id:'cdShuf',style:'width:auto',checked:c.shuffle?true:null,onchange:function(){c.shuffle=this.checked;}});
+    box.append(el('div',{class:'card'},
+      el('h2',{text:'Word revision'}),
+      el('p',{class:'muted small',style:'margin:0',text:'Tap ✗ on any word you do not know and it goes into your weak bucket on its own. It comes back every 3 days. You have finished '+saved+' of '+all.length+' words in this set.'}),
+      el('label',null,'Word set',sel),
+      el('div',{class:'row'},el('label',null,'Start at word',st),el('label',null,'How many',sz)),
+      el('label',{style:'flex-direction:row;align-items:center;gap:8px'},sh,'Shuffle this batch'),
+      el('div',null,el('button',{class:'btn',type:'button',onclick:function(){cdStart();renderCards();}},'Start'))));
+    return;
+  }
+  if(c.stage==='done'){
+    var chips=el('div',{class:'chips'});c.red.forEach(function(w){chips.append(el('span',{class:'chip bad',text:w}));});
+    box.append(el('div',{class:'card'},
+      el('h2',{text:'Batch finished'}),
+      el('p',{style:'margin:0',text:c.knew+' known, '+c.red.length+' added to your weak bucket.'}),
+      c.red.length?chips:null,
+      el('div',{class:'row'},
+        el('button',{class:'btn',type:'button',onclick:function(){S.cd={stage:'setup',deck:c.deck,size:c.size,start:null,shuffle:c.shuffle};cdStart();renderCards();}},'Next '+c.size+' words'),
+        el('button',{class:'btn ghost',type:'button',onclick:function(){S.cd={stage:'setup',deck:c.deck,size:c.size,start:null,shuffle:c.shuffle};renderCards();}},'Back'))));
+    return;
+  }
+  var x=c.list[c.i];
+  function flip(){c.flip=!c.flip;renderCards();}
+  var fc=el('div',{class:'flashcard',role:'button',tabindex:'0','aria-label':'Show or hide the meaning',onclick:flip,onkeydown:function(e){if(e.key===' '||e.key==='Enter'){e.preventDefault();flip();}}},el('div',{class:'w',text:x.w}));
+  if(c.flip){
+    if(x.m)fc.append(el('div',{class:'m',text:x.m}));
+    if(x.o)fc.append(el('div',{class:'h',text:x.o}));
+    if(x.s)fc.append(el('div',{class:'h',text:'Synonyms: '+x.s}));
+    if(x.g&&S.groups.has(x.g)){var mt=S.groups.get(x.g).filter(function(y){return y!==x.w;}).slice(0,10);if(mt.length)fc.append(el('div',{class:'h small',text:'Same group: '+mt.join(', ')}));}
+    if(x.ai)fc.append(el('div',{class:'muted small',text:'Meaning written by Claude'}));
+  }else{fc.append(el('div',{class:'muted small',text:'Tap the card to see the meaning'}));}
+  var slider=el('input',{type:'range',min:'1',max:String(c.list.length),value:String(c.i+1),'aria-label':'Jump to a word',onchange:function(){c.i=parseInt(this.value,10)-1;c.flip=false;renderCards();}});
+  var acts=el('div',{class:'row',style:'align-items:stretch'},
+    el('button',{class:'btn bad big',type:'button',onclick:function(){cdAnswer(false);}},'✗ Don’t know'),
+    window.speechSynthesis?el('button',{class:'btn ghost',type:'button','aria-label':'Pronounce',onclick:function(){speakWord(x.w);}},'Listen'):null,
+    el('button',{class:'btn good big',type:'button',onclick:function(){cdAnswer(true);}},'✓ Know'));
+  box.append(el('div',{class:'card'},
+    el('div',{class:'row',style:'justify-content:space-between;align-items:center'},
+      el('span',{class:'muted small',text:'Word '+(c.startIdx+c.i+1)+' of '+c.total+' · '+(c.i+1)+' of '+c.list.length}),
+      el('span',null,c.i>0?el('button',{class:'btn small ghost',type:'button',onclick:function(){c.i--;c.flip=false;renderCards();}},'Back'):null,' ',
+        el('button',{class:'btn small ghost',type:'button',onclick:function(){cdPersist();S.cd={stage:'setup',deck:c.deck,size:c.size,start:null,shuffle:c.shuffle};renderCards();}},'Stop'))),
+    fc,acts,slider,
+    c.red.length?el('p',{class:'muted small',style:'margin:0',text:c.red.length+' in your weak bucket from this batch'}):null));
+}
+
 /* ---------- wiring ---------- */
 function val(id){return $('#'+id).value;}
 function init(){
@@ -674,8 +771,8 @@ function init(){
     }
   });
 
-  var h=(location.hash||'').replace('#','');if(['today','words','articles','verbal','quant'].indexOf(h)>=0)S.tab=h;
-  window.addEventListener('hashchange',function(){var x=(location.hash||'').replace('#','');if(['today','words','articles','verbal','quant'].indexOf(x)>=0&&x!==S.tab){S.tab=x;render();}});
+  var h=(location.hash||'').replace('#','');if(['today','cards','words','articles','verbal','quant'].indexOf(h)>=0)S.tab=h;
+  window.addEventListener('hashchange',function(){var x=(location.hash||'').replace('#','');if(['today','cards','words','articles','verbal','quant'].indexOf(x)>=0&&x!==S.tab){S.tab=x;render();}});
   render();
   setTimeout(function(){S.timedOut=true;schedule();},10000);
   loadBankFile();
@@ -703,6 +800,7 @@ function start(db){
   sub('verbal',function(s){S.verbal=rows(s);});
   sub('quant',function(s){S.quant=rows(s);});
   sub('daily',function(s){S.daily={};s.docs.forEach(function(d){S.daily[d.id]=d.data();});});
+  sub('meta',function(s){S.meta={};s.docs.forEach(function(d){S.meta[d.id]=d.data();});});
   sub('bank',function(s){
     var m=new Map();
     s.docs.forEach(function(d){var ws=d.data().words;if(Array.isArray(ws))ws.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});});
