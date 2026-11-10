@@ -41,7 +41,7 @@ nav .badge{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;bor
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 .row>*{min-width:0}
-label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em;flex:1 1 140px}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em}
 input,select,textarea{font:400 15px var(--font-body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;width:100%;min-width:0}
 textarea{min-height:64px;resize:vertical}
 input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -120,6 +120,8 @@ input[type=range]{padding:0;border:0;background:transparent}
 .dtab{border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
 .dtab th,.dtab td{border:1px solid var(--line);padding:6px 10px;text-align:left}
 .dtab th{background:var(--accent-soft)}
+.row>label{flex:1 1 140px}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @media (max-width:480px){.barrow{grid-template-columns:90px 1fr 30px}}
 body{margin:0}img{max-width:100%}[hidden]{display:none!important}
@@ -256,11 +258,16 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
     </form>
     <form id="qmForm" class="card">
       <h2>Log a missed question</h2>
+      <label>The question (paste or type it in full, with the answer choices)<textarea id="qmQ" style="min-height:110px" placeholder="Quantity A ... Quantity B ... or the full question with choices A to E"></textarea></label>
+      <div id="qmDetect" class="tags"></div>
+      <div class="row">
+        <label>Topic<select id="qmTopic"></select></label>
+        <label>Format<select id="qmFmt"><option>Quantitative Comparison</option><option>Multiple choice</option><option>Select all that apply</option><option>Numeric entry</option><option>Data interpretation</option></select></label>
+      </div>
       <div class="row">
         <label>Date<input id="qmDate" type="date" required></label>
-        <label>Topic<select id="qmTopic"></select></label>
+        <label>Source (optional)<input id="qmRef" placeholder="Gregmat module, book, drill..."></label>
       </div>
-      <label>Question reference<input id="qmRef" placeholder="Module, part, question number" required></label>
       <label>Type of error
         <select id="qmType">
           <option>Concept gap</option><option>Set-up or translation</option><option>Formula forgotten</option>
@@ -638,6 +645,7 @@ function renderVerbal(){
 function renderQuant(){
   renderQD();
   var rows=qAnalysis(),st=$('#qStats');st.textContent='';
+  renderMissInsights(st);
   var card=el('div',{class:'card'},el('h2',{text:'Weak topics, weakest first'}));
   if(!rows.length)card.append(el('p',{class:'muted',style:'margin:0',text:'Log quiz scores and missed questions. Topics under 80% or with repeated misses are ranked here with a method to try.'}));
   rows.forEach(function(r){
@@ -658,11 +666,78 @@ function renderQuant(){
         el('span',{class:'muted small',text:nice(d.date)+(d.total?' · '+d.correct+'/'+d.total:'')}),el('div',null,delBtn('quant',d.id))));
     }else{
       l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:d.topic+' · '+d.ref}),el('span',{class:'chip bad',text:d.errType})),
-        el('span',{class:'muted small',text:nice(d.date)}),d.why?el('p',{class:'small',text:d.why}):null,d.next?el('div',{class:'tip',text:'Try next: '+d.next}):null,el('div',null,delBtn('quant',d.id))));
+        el('span',{class:'muted small',text:nice(d.date)+(d.fmt?' \u00b7 '+d.fmt:'')}),d.q?el('p',{class:'small',style:'white-space:pre-line;border-left:3px solid var(--line);padding-left:8px',text:d.q.length>400?d.q.slice(0,400)+'...':d.q}):null,(d.tags&&d.tags.length)?el('div',{class:'tags'},d.tags.map(function(x){var lg=logicById(x);return lg?el('span',{class:'chip warn',title:lg.tip,text:lg.label}):null;})):null,d.why?el('p',{class:'small',text:'Why: '+d.why}):null,d.next?el('div',{class:'tip',text:'Try next: '+d.next}):null,el('div',null,delBtn('quant',d.id))));
     }
   });
 }
 
+/* ---------- missed-question detection ---------- */
+var FMTS=['Quantitative Comparison','Multiple choice','Select all that apply','Numeric entry','Data interpretation'];
+var TOPIC_KW=[
+ ['Sequences & Series',/\bsequence|\bterms?\b|\bseries\b|arithmetic progression|geometric progression|\bnth\b|\ba[₁₂ₙ]|\ba_n\b/i],
+ ['Permutations & Combinations',/how many (different )?(ways|arrangements|orders|teams|committees|groups|combinations|outcomes)|arrange|committee|\bchoose\b|permutation|combination|\bselected?\b/i],
+ ['Probability',/probab|at random|chance|\bdice|\bdie\b|coin|marbles?|\bodds\b|drawn|likely/i],
+ ['Coordinate Geometry',/xy-plane|coordinate|slope|intercept|\bline (k|l|m|y)\b|y\s*=\s*-?\d*\.?\d*x|quadrant|\(\s*-?\d+\s*,\s*-?\d+\s*\)/i],
+ ['Circles',/circle|radius|diameter|circumference|\barc\b|\bchord|sector|π|\bpi\b/i],
+ ['Inequalities',/[<>≤≥]|inequalit|\babsolute value|\|x/i],
+ ['Quadratics',/quadratic|x²|x\^2|squared|\broots?\b|factor (the )?expression|parabola/i],
+ ['Number properties',/remainder|divisible|divisor|\bprime|\bfactors?\b|\bmultiples?\b|\bintegers?\b|odd|even|units digit|consecutive|\bgcf\b|\blcm\b/i],
+ ['Fractions & decimals',/fraction|decimal|reciprocal|numerator|denominator/i],
+ ['Percentages',/percent|%|discount|markup|interest|profit/i],
+ ['Ratios & proportions',/ratio|proportion|\bto \d+ ratio|\d+\s*:\s*\d+|for every/i],
+ ['Exponents & roots',/exponent|power|√|square root|cube root|\^\d|[²³⁴⁵⁶⁷⁸⁹]/i],
+ ['Averages & statistics',/average|arithmetic mean|\bmean\b|median|mode|range|standard deviation|percentile|quartile/i],
+ ['Linear equations',/solve for|system of|\bequations?\b|value of [a-z]\b/i],
+ ['Word problems',/hours?|minutes?|miles|speed|rate|together|work(ing)? alone|tank|pipe|mixture|years old|age/i],
+ ['Lines, angles & triangles',/triangle|angle|degrees|hypotenuse|isosceles|equilateral|parallel|perpendicular lines|pythag/i],
+ ['Polygons & 3D',/rectangle|square|polygon|hexagon|pentagon|cube|cylinder|volume|surface area|prism|sphere/i],
+ ['Data interpretation',/table|graph|chart|in the year|according to the (graph|table|data)|survey/i]
+];
+var LOGIC=[
+ {id:'cases',label:'Testing cases',re:/quantity a|must be true|could be|cannot be determined|which of the following/i,tip:'Plug in several numbers before deciding: a positive, a negative, zero, a fraction and a large number. If two cases disagree, the answer is D (or the statement is not "must be true").'},
+ {id:'negatives',label:'Negatives and zero',re:/integer|nonzero|≠ ?0|x ?< ?0|negative/i,tip:'Unless a number is stated to be positive, it can be negative or zero. Squaring, dividing and multiplying by negatives flips results.'},
+ {id:'complement',label:'At least / complement',re:/at least|at most|none of|not all/i,tip:'For "at least one", compute 1 − P(none) or total − (none). It is almost always faster.'},
+ {id:'replacement',label:'With / without replacement',re:/without replacement|with replacement|one after (the )?another/i,tip:'Without replacement, the second pick has one fewer item in both the favorable count and the total.'},
+ {id:'order',label:'Does order matter?',re:/how many (different )?(ways|arrangements|teams|committees|groups)|arrange|committee|choose|select/i,tip:'Ask first: does order matter? Arrangements = permutations; teams and groups = combinations. Fill restricted slots first.'},
+ {id:'offbyone',label:'Counting terms (off by one)',re:/inclusive|from \d+ to \d+|\d+(st|nd|rd|th) term|nth term|between \d+ and \d+/i,tip:'Number of terms = (last − first)/step + 1. The nth term uses (n − 1) steps, not n.'},
+ {id:'chain',label:'Successive percents',re:/percent[^.]*(then|and then|after|followed)[^.]*percent|increased by \d+ percent[^.]*decreased|decreased by \d+ percent[^.]*increased/i,tip:'Successive percent changes multiply (1.25 × 0.8), they do not add.'},
+ {id:'pctbase',label:'Percent change base',re:/percent (increase|decrease|greater|more|less|change)|by what percent|what percent (more|less|greater)/i,tip:'Percent change = change ÷ ORIGINAL value. Identify which number is the base before dividing.'},
+ {id:'avgspeed',label:'Average speed / weighted average',re:/average speed|average (score|price|age|weight) (of|for) (all|the entire|the whole)|combined average/i,tip:'Average speed = total distance ÷ total time. Group averages must be weighted by group sizes, never simply averaged.'},
+ {id:'cycle',label:'Remainder / units-digit cycles',re:/remainder|units digit|ones digit|last digit/i,tip:'Write out the first few powers or values and find the repeating cycle, then use the remainder of the exponent.'},
+ {id:'tworoots',label:'Two solutions',re:/x² ?=|x\^2 ?=|squared|\|x|absolute value/i,tip:'x² = a and |x| = a usually have two solutions. Never divide both sides by a variable that could be zero.'},
+ {id:'rates',label:'Combined rates',re:/together|working alone|alone .* hours|pipes?|fill the tank|at the same rate/i,tip:'Add rates (jobs per hour), never times: 1/a + 1/b = 1/t.'},
+ {id:'geomrules',label:'Geometry rules',re:/third side|perpendicular|inscribed|not drawn to scale|figure/i,tip:'Use the rules, not the picture: triangle inequality, negative-reciprocal slopes, inscribed shapes share the diameter. Figures are not drawn to scale unless stated.'},
+ {id:'estimate',label:'Estimation',re:/closest to|approximately|roughly|estimate/i,tip:'Round early and compare orders of magnitude; the choices are usually far apart.'},
+ {id:'translate',label:'Translating words to math',re:/.{240,}/,tip:'Translate before calculating: name each unknown, write one equation per sentence, then solve.'}
+];
+function detectQ(text){
+  var t=String(text||''),best=null,bs=0;
+  TOPIC_KW.forEach(function(k){var m=t.match(new RegExp(k[1].source,'gi'));var n=m?m.length:0;if(n>bs){bs=n;best=k[0];}});
+  var fmt=/quantity\s*a/i.test(t)?FMTS[0]:/indicate all|select all|all such|select (two|three)/i.test(t)?FMTS[2]:/(^|\n)\s*\(?[A-E][).:]\s|\n\s*[A-E]\s+\S/.test(t)?FMTS[1]:/table|graph|chart/i.test(t)?FMTS[4]:FMTS[3];
+  var tags=LOGIC.filter(function(l){return l.re.test(t);});
+  if(fmt!==FMTS[0])tags=tags.filter(function(l){return l.id!=='cases'||/must be true|could be/i.test(t);});
+  return {topic:best,fmt:fmt,tags:tags};
+}
+function logicById(id){return LOGIC.filter(function(l){return l.id===id;})[0];}
+function renderMissInsights(st){
+  var miss=S.quant.filter(function(d){return d.kind==='miss';});
+  var card=el('div',{class:'card'},el('h2',{text:'What you keep getting wrong'}));
+  if(!miss.length){card.append(el('p',{class:'muted',style:'margin:0',text:'Paste each question you miss into "Log a missed question" below. The app tags its format and the logic it tests, and this card shows the patterns.'}));st.append(card);return;}
+  var fm={},tg={},et={};
+  miss.forEach(function(d){if(d.fmt)fm[d.fmt]=(fm[d.fmt]||0)+1;(d.tags||[]).forEach(function(x){tg[x]=(tg[x]||0)+1;});if(d.errType)et[d.errType]=(et[d.errType]||0)+1;});
+  var tks=Object.keys(tg).sort(function(a,b){return tg[b]-tg[a];});
+  if(tks.length){
+    card.append(el('h3',{text:'Logic you need to work on'}));
+    var mx=tg[tks[0]];
+    tks.slice(0,6).forEach(function(k){var l=logicById(k);if(l)card.append(bar(l.label,tg[k],mx,'bad'));});
+    tks.slice(0,2).forEach(function(k){var l=logicById(k);if(l)card.append(el('div',{class:'tip',text:l.label+': '+l.tip}));});
+  }
+  var fks=Object.keys(fm).sort(function(a,b){return fm[b]-fm[a];});
+  if(fks.length){card.append(el('h3',{text:'Misses by question format'}));var mf=fm[fks[0]];fks.forEach(function(k){card.append(bar(k,fm[k],mf,'warn'));});}
+  var eks=Object.keys(et).sort(function(a,b){return et[b]-et[a];});
+  if(eks.length)card.append(el('p',{class:'small',style:'margin:0',text:'Most common cause: '+eks[0]+' ('+et[eks[0]]+' of '+miss.length+' misses).'}));
+  st.append(card);
+}
 /* ---------- Quant ETS-style drills ---------- */
 function qRange(n,part){var a=[],h=Math.ceil(n/2);for(var i=0;i<n;i++){if(!part||(part==='a'?i<h:i>=h))a.push(i);}return a;}
 function drillButtons(nx,parts,start,dlen){
@@ -749,7 +824,7 @@ function renderQD(){
           card.append(el('div',{class:'row',style:'align-items:flex-end'},el('label',{style:'flex:1 1 200px'},'What went wrong?',sel),
             el('button',{class:'btn small',type:'button',onclick:function(){
               var stem=q.kind==='qc'?('A: '+q.a+' | B: '+q.b):q.stem;
-              save('quant',null,{kind:'miss',date:today(),topic:q.topic,ref:'ETS-style drill '+d.day+' · Q'+(qi+1),errType:sel.value,why:stem.slice(0,300),next:q.explain}).then(function(okk){if(okk){r.saved[qi]=true;renderQD();}});
+              save('quant',null,{kind:'miss',date:today(),topic:q.topic,fmt:{qc:'Quantitative Comparison',mc:'Multiple choice',ma:'Select all that apply',ne:'Numeric entry'}[q.kind],q:stem,tags:detectQ((q.kind==='qc'?'Quantity A ':'')+stem+' '+(q.info||'')).tags.map(function(x){return x.id;}),ref:'ETS-style drill '+d.day+' · Q'+(qi+1),errType:sel.value,why:stem.slice(0,300),next:q.explain}).then(function(okk){if(okk){r.saved[qi]=true;renderQD();}});
             }},'Log it')));
         }
       }
@@ -1181,10 +1256,21 @@ function init(){
     if(t>0&&c>=0&&c<=t){doc.correct=c;doc.total=t;}
     if(await save('quant',null,doc)){toast('Quiz saved.');['qzC','qzT','qzP','qzLabel'].forEach(function(id){$('#'+id).value='';});}
   });
+  var qmT=0;
+  $('#qmTopic').addEventListener('change',function(){S.qmManual=true;});
+  $('#qmQ').addEventListener('input',function(){clearTimeout(qmT);qmT=setTimeout(function(){
+    var r=detectQ(val('qmQ')),box=$('#qmDetect');box.textContent='';S.qmTags=r.tags.map(function(x){return x.id;});
+    if(!val('qmQ').trim())return;
+    if(r.topic&&!S.qmManual)$('#qmTopic').value=r.topic;$('#qmFmt').value=r.fmt;
+    box.append(el('span',{class:'muted small',text:'Detected:'}),el('span',{class:'chip',text:r.fmt}),r.topic?el('span',{class:'chip',text:r.topic}):null);
+    r.tags.forEach(function(x){box.append(el('span',{class:'chip warn',title:x.tip,text:x.label}));});
+    if(r.tags.length)box.append(el('p',{class:'tip',style:'margin:4px 0 0;width:100%',text:'Logic this question tests: '+r.tags.map(function(x){return x.label+' \u2014 '+x.tip;}).join(' ')}));
+  },400);});
   $('#qmForm').addEventListener('submit',async function(e){
     e.preventDefault();
-    if(await save('quant',null,{kind:'miss',date:val('qmDate'),topic:val('qmTopic'),ref:val('qmRef').trim(),errType:val('qmType'),why:val('qmWhy').trim(),next:val('qmNext').trim()})){
-      toast('Saved.');var d=val('qmDate'),t=val('qmTopic');e.target.reset();$('#qmDate').value=d;$('#qmTopic').value=t;
+    var dq=detectQ(val('qmQ'));
+    if(await save('quant',null,{kind:'miss',date:val('qmDate'),topic:val('qmTopic'),fmt:val('qmFmt'),q:val('qmQ').trim().slice(0,2000),tags:(S.qmTags||dq.tags.map(function(x){return x.id;})),ref:val('qmRef').trim()||'Not specified',errType:val('qmType'),why:val('qmWhy').trim(),next:val('qmNext').trim()})){
+      toast('Saved. Check "What you keep getting wrong" above.');var d=val('qmDate'),t=val('qmTopic');e.target.reset();$('#qmDate').value=d;$('#qmTopic').value=t;$('#qmDetect').textContent='';S.qmTags=null;S.qmManual=false;
     }
   });
 
