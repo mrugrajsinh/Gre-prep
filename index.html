@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Prep Ledger</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: one narrow working column, five tabs, forms on top and lists below. Teal ink on cool paper. */
+:root{
+  --bg:#F3F6F8; --surface:#FFFFFF; --fg:#14202B; --muted:#5B6B7A; --line:#DCE3E9;
+  --accent:#0B6E6E; --accent-fg:#FFFFFF; --accent-soft:#E0F1F0;
+  --bad:#B3261E; --bad-bg:#FBE9E7; --good:#1B7A47; --good-bg:#E3F3EA; --warn:#8A5A00; --warn-bg:#FFF1D0;
+  --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-head:'Space Grotesk','Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E151B; --surface:#16202A; --fg:#E6EDF3; --muted:#93A4B3; --line:#293642;
+  --accent:#4FD1C5; --accent-fg:#06201E; --accent-soft:#12322F;
+  --bad:#FF8A7A; --bad-bg:#3A1D1A; --good:#6EDC9B; --good-bg:#16301F; --warn:#F2C45B; --warn-bg:#33290E; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E151B; --surface:#16202A; --fg:#E6EDF3; --muted:#93A4B3; --line:#293642;
+  --accent:#4FD1C5; --accent-fg:#06201E; --accent-soft:#12322F;
+  --bad:#FF8A7A; --bad-bg:#3A1D1A; --good:#6EDC9B; --good-bg:#16301F; --warn:#F2C45B; --warn-bg:#33290E; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5;
+  padding-block:20px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--font-head);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1{font-size:26px}h2{font-size:18px}h3{font-size:15px}
+.sub{color:var(--muted);margin:2px 0 0;font-size:13px}
+.top{display:flex;flex-direction:column;gap:12px}
+nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+nav button{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:7px 14px;font:500 14px var(--font-body);cursor:pointer}
+nav button[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+nav .badge{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>*{min-width:0}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em;flex:1 1 140px}
+input,select,textarea{font:400 15px var(--font-body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;width:100%;min-width:0}
+textarea{min-height:64px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);border-radius:7px;padding:8px 14px;font:600 14px var(--font-body);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.bad{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+.btn.good{background:var(--good-bg);border-color:var(--good);color:var(--good)}
+.btn.small{padding:4px 9px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:default}
+.chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;background:var(--accent-soft);color:var(--accent)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}.chip.good{background:var(--good-bg);color:var(--good)}.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.muted{color:var(--muted)}.small{font-size:13px}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:6px;min-width:0}
+.item .head{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.item .title{font-weight:600;overflow-wrap:anywhere}
+.item p{margin:0;overflow-wrap:anywhere}
+.stat{display:flex;gap:14px;flex-wrap:wrap}
+.stat>div{flex:1 1 120px}
+.big{font:700 34px var(--font-head);line-height:1}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent)}
+.bar.bad>i{background:var(--bad)}.bar.good>i{background:var(--good)}.bar.warn>i{background:var(--warn)}
+.barrow{display:grid;grid-template-columns:minmax(90px,170px) 1fr 34px;gap:10px;align-items:center;font-size:13px}
+.pips{display:inline-flex;gap:3px}.pips i{width:8px;height:8px;border-radius:50%;background:var(--line)}.pips i.on{background:var(--accent)}
+.check{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;color:var(--fg);font:400 15px var(--font-body);text-align:left;width:100%}
+.check:last-child{border-bottom:0}
+.box{flex:0 0 22px;width:22px;height:22px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;font-size:14px;color:var(--accent-fg)}
+.check[aria-pressed="true"] .box{background:var(--accent);border-color:var(--accent)}
+.week{display:flex;gap:6px}.week span{flex:1;height:26px;border-radius:5px;background:var(--line);display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.week span.on{background:var(--accent);color:var(--accent-fg)}.week span.part{background:var(--accent-soft);color:var(--accent)}
+.flash{font:700 40px var(--font-head);text-align:center;padding:26px 0;overflow-wrap:anywhere}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:5px 12px;font:500 13px var(--font-body);cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+details summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--accent)}
+.tip{background:var(--accent-soft);color:var(--fg);border-radius:7px;padding:8px 10px;font-size:13px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:20;max-width:90vw}
+.banner{border-radius:8px;padding:10px 12px;background:var(--warn-bg);color:var(--warn);font-size:14px}
+section[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:480px){.barrow{grid-template-columns:90px 1fr 30px}}
+body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div><h1>Prep Ledger</h1><p class="sub" id="dateline"></p></div>
+    <nav id="tabs" aria-label="Sections"></nav>
+  </header>
+  <div id="status"></div>
+
+  <section id="s-today">
+    <div id="todayBody" class="wrap" style="gap:14px"></div>
+    <div id="review" class="card" hidden></div>
+  </section>
+
+  <section id="s-words" hidden class="wrap" style="gap:14px">
+    <form id="wForm" class="card">
+      <h2>Add a weak word</h2>
+      <div class="row">
+        <label>Word<input id="wWord" required autocomplete="off" autocapitalize="none"></label>
+        <label>Source<select id="wSrc"><option>Gregmat</option><option>Magoosh</option><option>Article</option><option>TC/SE</option><option>Other</option></select></label>
+      </div>
+      <label>GRE meaning<input id="wMeaning" autocomplete="off" placeholder="Filled in from your word lists when the word is found"></label>
+      <label>Synonyms<input id="wSyn" autocomplete="off"></label>
+      <label>My own meaning or memory hook<textarea id="wOwn"></textarea></label>
+      <div class="row"><button class="btn" type="submit">Save as weak word</button><span id="wHint" class="muted small"></span></div>
+    </form>
+    <details class="card">
+      <summary>Paste a list of red words</summary>
+      <p class="muted small" style="margin:0">One per line. Add a meaning after " - " or "|" if you have it. Up to 100 at a time.</p>
+      <textarea id="wBulk" style="min-height:120px"></textarea>
+      <div class="row"><button id="wBulkGo" class="btn ghost" type="button">Add all</button><span id="wBulkMsg" class="muted small"></span></div>
+    </details>
+    <details class="card">
+      <summary>Import a word list (Gregmat or Magoosh)</summary>
+      <p class="muted small" style="margin:0">Choose a .txt or .csv file with one word per line: word, then the meaning after a comma, tab, " - " or "|". These become your reference meanings. They are not added to your weak list.</p>
+      <div class="row">
+        <label>Source<select id="wbSrc"><option>Gregmat</option><option>Magoosh</option><option>Other</option></select></label>
+        <label>File<input id="wbFile" type="file" accept=".txt,.csv,.tsv,text/plain,text/csv"></label>
+      </div>
+      <div class="row"><button id="wbGo" class="btn ghost" type="button">Import</button><span id="wbMsg" class="muted small"></span></div>
+    </details>
+    <div class="row" style="align-items:center">
+      <div class="chips" id="wFilter"></div>
+      <label style="flex:1 1 160px"><input id="wSearch" placeholder="Search words" aria-label="Search words"></label>
+    </div>
+    <div id="wList" class="list"></div>
+  </section>
+
+  <section id="s-articles" hidden class="wrap" style="gap:14px">
+    <form id="aForm" class="card">
+      <h2>Log an article review</h2>
+      <div class="row">
+        <label>Date<input id="aDate" type="date" required></label>
+        <label>Rating (out of 10)<input id="aScore" type="number" min="0" max="10" step="0.5" required></label>
+      </div>
+      <div class="row">
+        <label style="flex:2 1 220px">Title<input id="aTitle" required></label>
+        <label>Source<input id="aSource" placeholder="Economist, Aeon, ..."></label>
+      </div>
+      <label>Feedback and what to fix<textarea id="aFb"></textarea></label>
+      <div><button class="btn" type="submit">Save review</button></div>
+    </form>
+    <div id="aStats" class="card"></div>
+    <div id="aList" class="list"></div>
+  </section>
+
+  <section id="s-verbal" hidden class="wrap" style="gap:14px">
+    <form id="vsForm" class="card">
+      <h2>Log a TC/SC set</h2>
+      <div class="row">
+        <label>Date<input id="vsDate" type="date" required></label>
+        <label>Type<select id="vsType"><option>TC</option><option>SE</option><option>TC + SE mixed</option><option>RC</option></select></label>
+        <label>Correct<input id="vsC" type="number" min="0" required></label>
+        <label>Total<input id="vsT" type="number" min="1" required></label>
+      </div>
+      <div><button class="btn" type="submit">Save set</button></div>
+    </form>
+    <form id="vmForm" class="card">
+      <h2>Log a wrong answer</h2>
+      <div class="row">
+        <label>Date<input id="vmDate" type="date" required></label>
+        <label>Type<select id="vmType"><option>TC</option><option>SE</option><option>RC</option></select></label>
+        <label style="flex:2 1 200px">Question reference<input id="vmRef" placeholder="Book, page, question number" required></label>
+      </div>
+      <div class="row">
+        <label>I chose<input id="vmMine"></label>
+        <label>Correct answer<input id="vmRight"></label>
+      </div>
+      <label>Why it was wrong
+        <select id="vmReason">
+          <option>Missed a clue word</option><option>Vocabulary gap</option><option>Wrong sentence logic</option>
+          <option>Overthought it</option><option>Two-blank mismatch</option><option>Wrong passage reading</option><option>Careless slip</option>
+        </select>
+      </label>
+      <label>Explain in your own words<textarea id="vmWhy"></textarea></label>
+      <label>Alternative logic (what I will do next time)<textarea id="vmFix"></textarea></label>
+      <div><button class="btn" type="submit">Save wrong answer</button></div>
+    </form>
+    <div id="vStats" class="card"></div>
+    <div id="vList" class="list"></div>
+  </section>
+
+  <section id="s-quant" hidden class="wrap" style="gap:14px">
+    <form id="qzForm" class="card">
+      <h2>Log a quiz score</h2>
+      <div class="row">
+        <label>Date<input id="qzDate" type="date" required></label>
+        <label>Module and part<input id="qzLabel" placeholder="M6 · 3"></label>
+      </div>
+      <label>Topic<select id="qzTopic"></select></label>
+      <div class="row">
+        <label>Correct<input id="qzC" type="number" min="0"></label>
+        <label>Total<input id="qzT" type="number" min="1"></label>
+        <label>Or score %<input id="qzP" type="number" min="0" max="100"></label>
+      </div>
+      <div><button class="btn" type="submit">Save quiz</button></div>
+    </form>
+    <form id="qmForm" class="card">
+      <h2>Log a missed question</h2>
+      <div class="row">
+        <label>Date<input id="qmDate" type="date" required></label>
+        <label>Topic<select id="qmTopic"></select></label>
+      </div>
+      <label>Question reference<input id="qmRef" placeholder="Module, part, question number" required></label>
+      <label>Type of error
+        <select id="qmType">
+          <option>Concept gap</option><option>Set-up or translation</option><option>Formula forgotten</option>
+          <option>Graphing or diagram</option><option>Calculation slip</option><option>Careless</option><option>Skipped or ran out of time</option>
+        </select>
+      </label>
+      <label>Why it went wrong<textarea id="qmWhy"></textarea></label>
+      <label>Different method to try next time<textarea id="qmNext"></textarea></label>
+      <div><button class="btn" type="submit">Save missed question</button></div>
+    </form>
+    <div id="qStats" class="list"></div>
+    <div id="qList" class="list"></div>
+  </section>
+</div>
+<div id="toast" hidden role="status"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+'use strict';
+/* PASTE YOUR FIREBASE WEB APP CONFIG HERE (Firebase console > Project settings > Your apps > Web app) */
+var FIREBASE_CONFIG={
+  apiKey:'PASTE',
+  authDomain:'PASTE',
+  projectId:'PASTE',
+  storageBucket:'PASTE',
+  messagingSenderId:'PASTE',
+  appId:'PASTE'
+};
+var TOPICS=['Sequences & Series','Permutations & Combinations','Probability','Coordinate Geometry','Inequalities','Quadratics','Circles','Number properties','Fractions & decimals','Percentages','Ratios & proportions','Exponents & roots','Averages & statistics','Linear equations','Word problems','Lines, angles & triangles','Polygons & 3D','Data interpretation','Other'];
+var TIPS={
+ 'Sequences & Series':'Write out the first four terms before using a formula. Decide whether you add a fixed amount (arithmetic) or multiply by a fixed amount (geometric). Count terms as last minus first, plus one.',
+ 'Permutations & Combinations':'Ask whether order matters before choosing a formula. Build the answer slot by slot, and fill the restricted slot first.',
+ 'Probability':'Rewrite it as favorable over total. Multiply for "and", add for "or" (minus the overlap), and use 1 minus "none" for "at least one".',
+ 'Coordinate Geometry':'Sketch every question. Mark the points and lines, then read slope, distance and intercepts from the picture. Test one point such as (0,0) to see which side an inequality shades.',
+ 'Inequalities':'Flip the sign when multiplying or dividing by a negative. Check your answer with one number from the solution range and one from outside it.',
+ 'Quadratics':'Try factoring first, then check the discriminant. Sketch the parabola to see where the roots and vertex sit.',
+ 'Circles':'Match the equation to (x - h)^2 + (y - k)^2 = r^2 to read the center and radius. Complete the square if it is not in that form.'
+};
+var ALT='Try a different route: redo it from scratch without notes, then solve it a second way (plug in numbers, work backward, or draw it) and compare the two.';
+var REASON_TIPS={
+ 'Missed a clue word':'Underline the contrast and support words (but, although, because, thus) before you look at the options.',
+ 'Vocabulary gap':'Add the word to your weak list so it comes back on the spaced schedule.',
+ 'Wrong sentence logic':'Say in your own words what each blank must mean before you read the options.',
+ 'Overthought it':'Pick the option that fits the plain meaning of the sentence, not the cleverest reading.',
+ 'Two-blank mismatch':'Fill the easier blank first, then check the second blank against the first.',
+ 'Wrong passage reading':'Point to the exact line that supports the answer before you pick it.',
+ 'Careless slip':'Slow down on the final check and re-read the question stem.'
+};
+var INT=[1,3,7,14,30];
+var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Article: 1 reviewed and rated'],['t','TC/SC: 2 to 3 sets done']];
+var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false};
+
+function $(s,r){return (r||document).querySelector(s);}
+function el(tag,attrs){
+  var e=document.createElement(tag);
+  if(attrs){Object.keys(attrs).forEach(function(k){
+    var v=attrs[k]; if(v==null||v===false)return;
+    if(k==='class')e.className=v; else if(k==='text')e.textContent=v;
+    else if(k.slice(0,2)==='on')e.addEventListener(k.slice(2),v);
+    else e.setAttribute(k,v===true?'':v);});}
+  for(var i=2;i<arguments.length;i++){add(e,arguments[i]);}
+  return e;
+}
+function add(e,c){
+  if(c==null||c===false)return;
+  if(Array.isArray(c)){c.forEach(function(x){add(e,x);});return;}
+  e.append(c.nodeType?c:document.createTextNode(String(c)));
+}
+function pad(n){return String(n).padStart(2,'0');}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function today(){return ymd(new Date());}
+function addDays(s,n){var p=s.split('-');return ymd(new Date(+p[0],+p[1]-1,+p[2]+n));}
+function nice(s){if(!s)return '';var p=s.split('-');var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return +p[2]+' '+m[+p[1]-1];}
+function toast(m){var t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){t.hidden=true;},2600);}
+function pctClass(p){return p>=80?'good':(p>=60?'warn':'bad');}
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+
+async function save(col,id,data){
+  if(!S.db){toast('Not signed in, nothing was saved.');return false;}
+  try{var ref=id?S.db.collection(col).doc(id):S.db.collection(col).doc();await ref.set(data);return true;}
+  catch(e){toast('Could not save ('+(e&&e.code||'error')+').');return false;}
+}
+async function patch(col,id,data){
+  if(!S.db)return false;
+  try{await S.db.collection(col).doc(id).update(data);return true;}catch(e){toast('Could not update ('+(e&&e.code||'error')+').');return false;}
+}
+function delBtn(col,id){
+  var b=el('button',{class:'btn small ghost',type:'button',text:'Delete'});
+  var armed=false;
+  b.addEventListener('click',async function(){
+    if(!armed){armed=true;b.textContent='Tap again to delete';setTimeout(function(){armed=false;b.textContent='Delete';},3000);return;}
+    try{await S.db.collection(col).doc(id).delete();}catch(e){toast('Could not delete.');}
+  });
+  return b;
+}
+function bar(label,val,max,cls,shown){
+  var w=max?Math.max(2,Math.round(val/max*100)):0;
+  return el('div',{class:'barrow'},el('span',{text:label}),el('div',{class:'bar '+(cls||'')},el('i',{style:'width:'+w+'%'})),el('span',{class:'muted',text:shown==null?String(val):shown}));
+}
+
+/* ---------- analysis ---------- */
+function dueWords(){var t=today();return S.words.filter(function(w){return !w.mastered&&(w.due||t)<=t;});}
+function qAnalysis(){
+  var m={};
+  S.quant.forEach(function(d){
+    var t=m[d.topic]||(m[d.topic]={topic:d.topic,pcts:[],misses:0,types:{}});
+    if(d.kind==='quiz'&&typeof d.pct==='number')t.pcts.push({d:d.date||'',p:d.pct});
+    if(d.kind==='miss'){t.misses++;var k=d.errType||'Other';t.types[k]=(t.types[k]||0)+1;}
+  });
+  var rows=Object.keys(m).map(function(k){
+    var t=m[k];t.pcts.sort(function(a,b){return a.d<b.d?-1:(a.d>b.d?1:0);});
+    var last=t.pcts.slice(-3);
+    t.avg=last.length?Math.round(last.reduce(function(s,x){return s+x.p;},0)/last.length):null;
+    t.score=(t.avg==null?40:100-t.avg)+t.misses*4;
+    return t;});
+  rows.sort(function(a,b){return b.score-a.score;});
+  return rows;
+}
+function topKey(o){var best=null;Object.keys(o).forEach(function(k){if(best==null||o[k]>o[best])best=k;});return best;}
+function vAnalysis(){
+  var reasons={},sets=[];
+  S.verbal.forEach(function(d){
+    if(d.kind==='miss'){var k=d.reason||'Other';reasons[k]=(reasons[k]||0)+1;}
+    if(d.kind==='set')sets.push(d);
+  });
+  sets.sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;});
+  return {reasons:reasons,sets:sets};
+}
+
+/* ---------- render ---------- */
+var raf=0;
+function schedule(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;render();});}
+function render(){
+  $('#dateline').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  renderStatus();renderTabs();
+  ['today','words','articles','verbal','quant'].forEach(function(t){$('#s-'+t).hidden=(t!==S.tab);});
+  if(S.tab==='today')renderToday();
+  if(S.tab==='words')renderWords();
+  if(S.tab==='articles')renderArticles();
+  if(S.tab==='verbal')renderVerbal();
+  if(S.tab==='quant')renderQuant();
+}
+function renderStatus(){
+  var s=$('#status');s.textContent='';
+  if(S.setup){s.append(el('div',{class:'banner',text:'Paste your Firebase config into FIREBASE_CONFIG at the top of the script in index.html.'}));return;}
+  if(S.signin){s.append(el('div',{class:'banner'},el('p',{style:'margin:0 0 8px',text:'Sign in to load and save your data.'}),el('button',{class:'btn',type:'button',onclick:function(){firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(e){toast('Sign-in failed: '+(e&&e.code||'error'));});}},'Sign in with Google')));return;}
+  if(!S.db){s.append(el('div',{class:'banner',text:'Connecting...'}));return;}
+  if(S.err){s.append(el('div',{class:'banner',text:'Your data could not be loaded ('+S.err+'). Reload the page.'}));return;}
+  var need=['words','articles','verbal','quant','daily','bank'].some(function(k){return !S.ready[k];});
+  if(need&&S.timedOut)s.append(el('div',{class:'banner',text:'Still waiting for your saved data. What you see may be out of date.'}));
+}
+function renderTabs(){
+  var nav=$('#tabs');nav.textContent='';
+  var due=S.db?dueWords().length:0;
+  [['today','Today'],['words','Words'],['articles','Articles'],['verbal','TC/SC'],['quant','Quant']].forEach(function(t){
+    var b=el('button',{type:'button','aria-current':S.tab===t[0]?'true':'false',onclick:function(){go(t[0]);}},t[1]);
+    if(t[0]==='words'&&due>0)b.append(el('span',{class:'badge',text:due}));
+    nav.append(b);
+  });
+}
+function go(t){S.tab=t;try{location.hash=t;}catch(e){}render();window.scrollTo(0,0);}
+
+function renderToday(){
+  var body=$('#todayBody');
+  if(S.rev){body.hidden=true;return;}
+  body.hidden=false;body.textContent='';
+  var due=dueWords();
+  var t=today();
+  var dd=S.daily[t]||{};
+  var done=DAILY.filter(function(x){return dd[x[0]];}).length;
+
+  body.append(el('div',{class:'card'},
+    el('h2',{text:'Words to review'}),
+    el('div',{class:'stat'},
+      el('div',null,el('div',{class:'big',text:due.length}),el('div',{class:'muted small',text:due.length===1?'word is due today':'words are due today'})),
+      el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return !w.mastered;}).length}),el('div',{class:'muted small',text:'weak words in rotation'})),
+      el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return w.mastered;}).length}),el('div',{class:'muted small',text:'mastered'}))),
+    el('div',null,el('button',{class:'btn',type:'button',disabled:due.length===0,onclick:startReview},due.length?'Start review':'Nothing due'))
+  ));
+
+  var list=el('div',null);
+  DAILY.forEach(function(x){
+    list.append(el('button',{class:'check',type:'button','aria-pressed':dd[x[0]]?'true':'false',onclick:function(){toggleDaily(x[0]);}},
+      el('span',{class:'box',text:dd[x[0]]?'✓':''}),el('span',{text:x[1]})));
+  });
+  var week=el('div',{class:'week','aria-label':'Last 7 days'});
+  for(var i=6;i>=0;i--){
+    var d=addDays(t,-i),v=S.daily[d]||{},n=DAILY.filter(function(x){return v[x[0]];}).length;
+    week.append(el('span',{class:n===4?'on':(n>0?'part':''),title:d+': '+n+' of 4',text:String(+d.slice(8))}));
+  }
+  body.append(el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('h2',{text:'Today’s plan'}),el('span',{class:'chip '+(done===4?'good':''),text:done+' of 4'})),list,week));
+
+  var rows=qAnalysis().filter(function(r){return r.avg==null||r.avg<80||r.misses>=2;}).slice(0,3);
+  var fc=el('div',{class:'card'},el('h2',{text:'Quant topics to fix first'}));
+  if(!rows.length)fc.append(el('p',{class:'muted',style:'margin:0',text:'Log quiz scores and missed questions in the Quant tab and the weakest topics will appear here.'}));
+  rows.forEach(function(r){
+    fc.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:r.topic}),
+      el('span',null,r.avg!=null?el('span',{class:'chip '+pctClass(r.avg),text:'recent '+r.avg+'%'}):null,' ',r.misses?el('span',{class:'chip',text:r.misses+' missed'}):null)),
+      el('div',{class:'tip',text:TIPS[r.topic]||ALT})));
+  });
+  body.append(fc);
+
+  var va=vAnalysis(),rk=topKey(va.reasons);
+  if(rk){body.append(el('div',{class:'card'},el('h2',{text:'Most common TC/SC mistake'}),el('div',null,el('span',{class:'chip bad',text:rk}),' ',el('span',{class:'muted small',text:va.reasons[rk]+' of '+Object.keys(va.reasons).reduce(function(s,k){return s+va.reasons[k];},0)+' logged'})),el('div',{class:'tip',text:REASON_TIPS[rk]||''})));}
+}
+async function toggleDaily(k){
+  var t=today(),cur=Object.assign({},S.daily[t]||{});cur[k]=!cur[k];cur.date=t;
+  S.daily[t]=cur;schedule();
+  await save('daily',t,cur);
+}
+
+/* review */
+function startReview(){
+  var q=shuffle(dueWords());if(!q.length)return;
+  S.rev={q:q,i:0,shown:false,knew:0,missed:0};
+  renderToday();renderReview();
+}
+function renderReview(){
+  var box=$('#review'),r=S.rev;box.textContent='';
+  if(!r){box.hidden=true;return;}
+  box.hidden=false;
+  if(r.i>=r.q.length){
+    box.append(el('h2',{text:'Review finished'}),
+      el('p',{text:r.knew+' remembered, '+r.missed+' missed. Missed words come back tomorrow, then on a 3, 7, 14 and 30 day schedule.'}),
+      el('div',null,el('button',{class:'btn',type:'button',onclick:closeReview},'Done')));
+    return;
+  }
+  var w=r.q[r.i];
+  box.append(el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('span',{class:'muted small',text:(r.i+1)+' of '+r.q.length}),el('button',{class:'btn small ghost',type:'button',onclick:closeReview},'Stop')),
+    el('div',{class:'flash',text:w.word}));
+  if(!r.shown){
+    box.append(el('div',{class:'muted small',style:'text-align:center',text:'Say the meaning aloud first.'}),el('button',{class:'btn',type:'button',onclick:function(){r.shown=true;renderReview();}},'Show meaning'));
+    return;
+  }
+  var info=el('div',{class:'list'});
+  if(w.meaning)info.append(el('div',{class:'item'},el('span',{class:'muted small',text:'GRE meaning'}),el('p',{text:w.meaning})));
+  if(w.syn)info.append(el('div',{class:'item'},el('span',{class:'muted small',text:'Synonyms'}),el('p',{text:w.syn})));
+  if(w.own)info.append(el('div',{class:'item'},el('span',{class:'muted small',text:'My own meaning'}),el('p',{text:w.own})));
+  if(!w.meaning&&!w.syn&&!w.own)info.append(el('p',{class:'muted',text:'No meaning saved yet. Add one in the Words tab.'}));
+  box.append(info,el('div',{class:'row'},
+    el('button',{class:'btn bad',type:'button',style:'flex:1',onclick:function(){answer(false);}},'Missed it'),
+    el('button',{class:'btn good',type:'button',style:'flex:1',onclick:function(){answer(true);}},'Knew it')));
+}
+async function answer(ok){
+  var r=S.rev;if(!r||r.busy)return;r.busy=true;
+  var w=r.q[r.i],box=ok?Math.min((w.box||0)+1,5):0,upd;
+  if(box>=5)upd={box:5,mastered:true,due:'',seen:(w.seen||0)+1};
+  else upd={box:box,mastered:false,due:addDays(today(),INT[box]),seen:(w.seen||0)+1,misses:(w.misses||0)+(ok?0:1)};
+  await patch('words',w.id,upd);
+  if(ok)r.knew++;else r.missed++;
+  r.i++;r.shown=false;r.busy=false;renderReview();
+}
+function closeReview(){S.rev=null;$('#review').hidden=true;render();}
+
+/* words */
+function renderWords(){
+  var f=$('#wFilter');f.textContent='';
+  var due=dueWords().length,all=S.words.filter(function(w){return !w.mastered;}).length,mas=S.words.filter(function(w){return w.mastered;}).length;
+  [['due','Due ('+due+')'],['all','All weak ('+all+')'],['mastered','Mastered ('+mas+')']].forEach(function(x){
+    f.append(el('button',{type:'button','aria-pressed':S.wf===x[0]?'true':'false',onclick:function(){S.wf=x[0];renderWords();}},x[1]));
+  });
+  var t=today(),q=S.wq.trim().toLowerCase();
+  var items=S.words.filter(function(w){
+    if(S.wf==='due'&&(w.mastered||(w.due||t)>t))return false;
+    if(S.wf==='all'&&w.mastered)return false;
+    if(S.wf==='mastered'&&!w.mastered)return false;
+    return !q||(w.word||'').toLowerCase().indexOf(q)>=0||(w.meaning||'').toLowerCase().indexOf(q)>=0;
+  }).sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:(a.word<b.word?-1:1));});
+  var list=$('#wList');list.textContent='';
+  if(!items.length){
+    list.append(el('div',{class:'card muted',text:S.wf==='due'?'No words are due. Add the red words from your revision above and they will come back after 1, 3, 7, 14 and 30 days.':'Nothing here yet.'}));
+    return;
+  }
+  items.forEach(function(w){
+    var pips=el('span',{class:'pips'});for(var i=0;i<5;i++)pips.append(el('i',{class:i<(w.box||0)?'on':''}));
+    var d=el('details',{open:S.open.has(w.id)?true:null});
+    d.addEventListener('toggle',function(){if(d.open)S.open.add(w.id);else S.open.delete(w.id);});
+    var own=el('textarea',{'aria-label':'My own meaning for '+w.word},w.own||'');own.value=w.own||'';
+    var mean=el('input',{'aria-label':'GRE meaning for '+w.word,value:w.meaning||''});mean.value=w.meaning||'';
+    d.append(el('summary',{text:'Meaning and notes'}),
+      el('label',null,'GRE meaning',mean),el('label',null,'My own meaning or memory hook',own),
+      el('div',{class:'row'},
+        el('button',{class:'btn small',type:'button',onclick:async function(){if(await patch('words',w.id,{meaning:mean.value.trim(),own:own.value.trim()}))toast('Saved');}},'Save notes'),
+        w.mastered?el('button',{class:'btn small ghost',type:'button',onclick:function(){patch('words',w.id,{mastered:false,box:0,due:addDays(today(),1)});}},'Bring back'):el('button',{class:'btn small ghost',type:'button',onclick:function(){patch('words',w.id,{due:today()});}},'Review today'),
+        delBtn('words',w.id)));
+    list.append(el('div',{class:'item'},
+      el('div',{class:'head'},el('span',{class:'title',text:w.word}),el('span',null,pips,' ',el('span',{class:'muted small',text:w.mastered?'mastered':(((w.due||t)<=t)?'due now':'next '+nice(w.due))}))),
+      w.meaning?el('p',{class:'small',text:w.meaning}):null,
+      w.src?el('span',{class:'muted small',text:w.src+(w.misses?' · missed '+w.misses+'×':'')}):null,
+      d));
+  });
+}
+function wordDoc(word,meaning,syn,own,src){
+  var b=S.bank.get(word.toLowerCase());
+  return {word:word,meaning:meaning||(b&&b.m)||'',syn:syn||(b&&b.s)||'',own:own||'',src:src||(b&&b.src)||'',box:0,due:addDays(today(),1),added:today(),seen:0,misses:0,mastered:false};
+}
+async function addWord(word,meaning,syn,own,src){
+  word=word.trim().toLowerCase();if(!word)return false;
+  var ex=S.words.filter(function(w){return (w.word||'').toLowerCase()===word;})[0];
+  if(ex){return patch('words',ex.id,{box:0,mastered:false,due:addDays(today(),1),misses:(ex.misses||0)+1,meaning:meaning||ex.meaning||'',syn:syn||ex.syn||'',own:own||ex.own||''});}
+  return save('words',null,wordDoc(word,meaning,syn,own,src));
+}
+
+/* articles */
+function renderArticles(){
+  var items=S.articles.slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;});
+  var st=$('#aStats');st.textContent='';
+  st.append(el('h2',{text:'Ratings'}));
+  if(!items.length){st.append(el('p',{class:'muted',style:'margin:0',text:'No reviews yet. Add the rating and feedback you get for each article.'}));}
+  else{
+    var last=items.slice(0,10),avg=last.reduce(function(s,x){return s+(+x.score||0);},0)/last.length;
+    st.append(el('div',{class:'stat'},el('div',null,el('div',{class:'big',text:avg.toFixed(1)}),el('div',{class:'muted small',text:'average of last '+last.length})),el('div',null,el('div',{class:'big',text:items.length}),el('div',{class:'muted small',text:'articles reviewed'}))));
+    last.slice().reverse().forEach(function(x){st.append(bar(nice(x.date),+x.score||0,10,pctClass((+x.score||0)*10),String(x.score)));});
+  }
+  var l=$('#aList');l.textContent='';
+  items.forEach(function(x){
+    l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:x.title}),el('span',{class:'chip '+pctClass((+x.score||0)*10),text:x.score+'/10'})),
+      el('span',{class:'muted small',text:nice(x.date)+(x.source?' · '+x.source:'')}),x.feedback?el('p',{class:'small',text:x.feedback}):null,el('div',null,delBtn('articles',x.id))));
+  });
+}
+
+/* verbal */
+function renderVerbal(){
+  var va=vAnalysis(),st=$('#vStats');st.textContent='';
+  st.append(el('h2',{text:'Why answers go wrong'}));
+  var keys=Object.keys(va.reasons).sort(function(a,b){return va.reasons[b]-va.reasons[a];});
+  if(!keys.length)st.append(el('p',{class:'muted',style:'margin:0',text:'Log wrong answers with a reason and the pattern shows up here.'}));
+  var mx=keys.length?va.reasons[keys[0]]:0;
+  keys.forEach(function(k){st.append(bar(k,va.reasons[k],mx,'bad'));});
+  if(keys.length)st.append(el('div',{class:'tip',text:REASON_TIPS[keys[0]]||''}));
+  if(va.sets.length){
+    st.append(el('h3',{text:'Recent set scores'}));
+    va.sets.slice(0,6).forEach(function(s){var p=Math.round(s.correct/s.total*100);st.append(bar(nice(s.date)+' '+s.type,p,100,pctClass(p),p+'%'));});
+  }
+  var l=$('#vList');l.textContent='';
+  S.verbal.filter(function(d){return d.kind==='miss';}).sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;}).forEach(function(d){
+    l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:d.type+' · '+d.ref}),el('span',{class:'chip bad',text:d.reason})),
+      el('span',{class:'muted small',text:nice(d.date)+(d.mine||d.right?' · chose '+(d.mine||'?')+', answer '+(d.right||'?'):'')}),
+      d.why?el('p',{class:'small',text:d.why}):null,d.fix?el('div',{class:'tip',text:'Next time: '+d.fix}):null,el('div',null,delBtn('verbal',d.id))));
+  });
+}
+
+/* quant */
+function renderQuant(){
+  var rows=qAnalysis(),st=$('#qStats');st.textContent='';
+  var card=el('div',{class:'card'},el('h2',{text:'Weak topics, weakest first'}));
+  if(!rows.length)card.append(el('p',{class:'muted',style:'margin:0',text:'Log quiz scores and missed questions. Topics under 80% or with repeated misses are ranked here with a method to try.'}));
+  rows.forEach(function(r){
+    var weak=(r.avg!=null&&r.avg<80)||r.misses>=3,tk=topKey(r.types);
+    var it=el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:r.topic}),
+      el('span',null,r.avg!=null?el('span',{class:'chip '+pctClass(r.avg),text:'recent '+r.avg+'%'}):el('span',{class:'chip',text:'no quiz yet'}),' ',r.misses?el('span',{class:'chip',text:r.misses+' missed'}):null)));
+    if(r.avg!=null)it.append(el('div',{class:'bar '+pctClass(r.avg)},el('i',{style:'width:'+Math.max(2,r.avg)+'%'})));
+    if(tk)it.append(el('span',{class:'muted small',text:'Most common error: '+tk}));
+    if(weak)it.append(el('div',{class:'tip',text:(TIPS[r.topic]||'')+(TIPS[r.topic]?' ':'')+((r.avg!=null&&r.avg<70)||r.misses>=3?ALT:'')}));
+    card.append(it);
+  });
+  st.append(card);
+  var l=$('#qList');l.textContent='';
+  S.quant.slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;}).slice(0,40).forEach(function(d){
+    if(d.kind==='quiz'){
+      l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:'Quiz · '+d.topic+(d.label?' · '+d.label:'')}),el('span',{class:'chip '+pctClass(d.pct),text:d.pct+'%'})),
+        el('span',{class:'muted small',text:nice(d.date)+(d.total?' · '+d.correct+'/'+d.total:'')}),el('div',null,delBtn('quant',d.id))));
+    }else{
+      l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:d.topic+' · '+d.ref}),el('span',{class:'chip bad',text:d.errType})),
+        el('span',{class:'muted small',text:nice(d.date)}),d.why?el('p',{class:'small',text:d.why}):null,d.next?el('div',{class:'tip',text:'Try next: '+d.next}):null,el('div',null,delBtn('quant',d.id))));
+    }
+  });
+}
+
+/* ---------- wiring ---------- */
+function val(id){return $('#'+id).value;}
+function init(){
+  ['qzTopic','qmTopic'].forEach(function(id){var s=$('#'+id);TOPICS.forEach(function(t){s.append(el('option',{text:t}));});});
+  ['aDate','vsDate','vmDate','qzDate','qmDate'].forEach(function(id){$('#'+id).value=today();});
+
+  var wInput=$('#wWord');
+  function lookup(){
+    var b=S.bank.get(wInput.value.trim().toLowerCase()),h=$('#wHint');
+    if(b){if(!val('wMeaning'))$('#wMeaning').value=b.m||'';if(!val('wSyn'))$('#wSyn').value=b.s||'';h.textContent='Found in your '+(b.src||'word list')+'.';}
+    else h.textContent=S.bank.size?'Not in your word lists. Add the meaning yourself.':'';
+  }
+  wInput.addEventListener('change',lookup);wInput.addEventListener('blur',lookup);
+  $('#wForm').addEventListener('submit',async function(e){
+    e.preventDefault();
+    if(await addWord(val('wWord'),val('wMeaning').trim(),val('wSyn').trim(),val('wOwn').trim(),val('wSrc'))){
+      toast('Saved. It comes back tomorrow.');e.target.reset();$('#wHint').textContent='';
+    }
+  });
+  $('#wBulkGo').addEventListener('click',async function(){
+    var lines=val('wBulk').split(/\n/).map(function(x){return x.trim();}).filter(Boolean).slice(0,100),n=0,m=$('#wBulkMsg'),btn=this;
+    if(!lines.length)return;btn.disabled=true;
+    for(var i=0;i<lines.length;i++){
+      var parts=lines[i].split(/\s+-\s+|\||\t|—/),w=parts[0].trim(),mean=(parts.slice(1).join(' ')||'').trim();
+      m.textContent='Adding '+(i+1)+' of '+lines.length+'...';
+      if(w&&await addWord(w,mean,'','',''))n++;
+    }
+    btn.disabled=false;m.textContent=n+' words added.';$('#wBulk').value='';
+  });
+  $('#wbGo').addEventListener('click',async function(){
+    var f=$('#wbFile').files[0],msg=$('#wbMsg'),btn=this;
+    if(!f){msg.textContent='Choose a file first.';return;}
+    if(!S.db){msg.textContent='Sign in first.';return;}
+    btn.disabled=true;
+    try{
+      var text=await f.text(),src=val('wbSrc'),list=[];
+      text.split(/\r?\n/).forEach(function(line){
+        var m=line.match(/^\s*"?([A-Za-z][A-Za-z' -]*?)"?\s*(?:\t|,|;|\||\s-\s|:)\s*(.*)$/);
+        if(!m)return;
+        var mean=m[2].trim().replace(/^"|"$/g,'');
+        list.push({w:m[1].trim(),m:mean,src:src});
+      });
+      if(!list.length){msg.textContent='No words found. Check the file format.';btn.disabled=false;return;}
+      var n=0;
+      for(var i=0;i<list.length;i+=100){
+        var id=src.toLowerCase()+'-'+String(i/100).padStart(3,'0');
+        await S.db.collection('bank').doc(id).set({source:src,words:list.slice(i,i+100)});
+        n=Math.min(i+100,list.length);msg.textContent='Imported '+n+' of '+list.length+'...';
+      }
+      msg.textContent='Imported '+list.length+' words from '+src+'.';
+    }catch(e){msg.textContent='Import failed ('+(e&&e.code||'error')+').';}
+    btn.disabled=false;
+  });
+  $('#wSearch').addEventListener('input',function(){S.wq=this.value;renderWords();});
+
+  $('#aForm').addEventListener('submit',async function(e){
+    e.preventDefault();
+    if(await save('articles',null,{date:val('aDate'),title:val('aTitle').trim(),source:val('aSource').trim(),score:parseFloat(val('aScore')),feedback:val('aFb').trim()})){
+      toast('Review saved.');var d=val('aDate');e.target.reset();$('#aDate').value=d;
+    }
+  });
+  $('#vsForm').addEventListener('submit',async function(e){
+    e.preventDefault();var c=parseInt(val('vsC'),10),t=parseInt(val('vsT'),10);
+    if(!(t>0)||c<0||c>t){toast('Correct must be between 0 and the total.');return;}
+    if(await save('verbal',null,{kind:'set',date:val('vsDate'),type:val('vsType'),correct:c,total:t})){toast('Set saved.');$('#vsC').value='';$('#vsT').value='';}
+  });
+  $('#vmForm').addEventListener('submit',async function(e){
+    e.preventDefault();
+    if(await save('verbal',null,{kind:'miss',date:val('vmDate'),type:val('vmType'),ref:val('vmRef').trim(),mine:val('vmMine').trim(),right:val('vmRight').trim(),reason:val('vmReason'),why:val('vmWhy').trim(),fix:val('vmFix').trim()})){
+      toast('Saved.');var d=val('vmDate');e.target.reset();$('#vmDate').value=d;
+    }
+  });
+  $('#qzForm').addEventListener('submit',async function(e){
+    e.preventDefault();
+    var c=parseInt(val('qzC'),10),t=parseInt(val('qzT'),10),p=parseFloat(val('qzP')),pct;
+    if(t>0&&c>=0&&c<=t)pct=Math.round(c/t*100);else if(!isNaN(p)&&p>=0&&p<=100)pct=Math.round(p);
+    if(pct==null){toast('Enter correct and total, or a score percentage.');return;}
+    var doc={kind:'quiz',date:val('qzDate'),topic:val('qzTopic'),label:val('qzLabel').trim(),pct:pct};
+    if(t>0&&c>=0&&c<=t){doc.correct=c;doc.total=t;}
+    if(await save('quant',null,doc)){toast('Quiz saved.');['qzC','qzT','qzP','qzLabel'].forEach(function(id){$('#'+id).value='';});}
+  });
+  $('#qmForm').addEventListener('submit',async function(e){
+    e.preventDefault();
+    if(await save('quant',null,{kind:'miss',date:val('qmDate'),topic:val('qmTopic'),ref:val('qmRef').trim(),errType:val('qmType'),why:val('qmWhy').trim(),next:val('qmNext').trim()})){
+      toast('Saved.');var d=val('qmDate'),t=val('qmTopic');e.target.reset();$('#qmDate').value=d;$('#qmTopic').value=t;
+    }
+  });
+
+  var h=(location.hash||'').replace('#','');if(['today','words','articles','verbal','quant'].indexOf(h)>=0)S.tab=h;
+  window.addEventListener('hashchange',function(){var x=(location.hash||'').replace('#','');if(['today','words','articles','verbal','quant'].indexOf(x)>=0&&x!==S.tab){S.tab=x;render();}});
+  render();
+  setTimeout(function(){S.timedOut=true;schedule();},10000);
+  connect();
+}
+var started=false;
+async function connect(){
+  if(!window.firebase||!FIREBASE_CONFIG.apiKey||FIREBASE_CONFIG.apiKey==='PASTE'){S.setup=true;render();return;}
+  firebase.initializeApp(FIREBASE_CONFIG);
+  firebase.auth().onAuthStateChanged(function(u){
+    if(!u){S.db=null;S.signin=true;render();return;}
+    S.signin=false;
+    if(started){render();return;}
+    started=true;start(firebase.firestore());
+  });
+}
+function start(db){
+  S.db=db;render();
+  function sub(name,fn){
+    return db.collection(name).onSnapshot(function(snap){fn(snap);S.ready[name]=true;schedule();},function(err){S.err=err&&err.code||'error';schedule();});
+  }
+  function rows(snap){return snap.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o;});}
+  sub('words',function(s){S.words=rows(s);});
+  sub('articles',function(s){S.articles=rows(s);});
+  sub('verbal',function(s){S.verbal=rows(s);});
+  sub('quant',function(s){S.quant=rows(s);});
+  sub('daily',function(s){S.daily={};s.docs.forEach(function(d){S.daily[d.id]=d.data();});});
+  sub('bank',function(s){
+    var m=new Map();
+    s.docs.forEach(function(d){var ws=d.data().words;if(Array.isArray(ws))ws.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});});
+    S.bank=m;
+  });
+}
+init();
+})();
+</script>
+
+</body>
+</html>
