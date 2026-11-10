@@ -87,6 +87,7 @@ section[hidden]{display:none}
 .flashcard .m{font-size:19px}
 .flashcard .h{color:var(--muted);overflow-wrap:anywhere}
 .btn.big{flex:1;padding:14px 10px;font-size:16px}
+.btn.picked{outline:3px solid currentColor;outline-offset:2px}
 input[type=range]{padding:0;border:0;background:transparent}
 .passage{font-size:16px;line-height:1.75;max-width:68ch}
 .passage p{margin:0 0 12px}
@@ -321,7 +322,7 @@ var REASON_TIPS={
 };
 var INT=[3,3,3];
 var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Reading: 1 passage with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
-var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',deck:'g',size:50,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null,qdrills:[],qd:null};
+var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',size:50,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null,qdrills:[],qd:null,hooks:{}};
 function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
 function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
 
@@ -451,8 +452,8 @@ function renderToday(){
     el('div',{class:'stat'},
       el('div',null,el('div',{class:'big',text:due.length}),el('div',{class:'muted small',text:due.length===1?'word is due today':'words are due today'})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return !w.mastered;}).length}),el('div',{class:'muted small',text:'weak words in rotation'})),
-      el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return w.mastered;}).length}),el('div',{class:'muted small',text:'mastered'}))),
-    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Revise words'),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:startReview},due.length?'Review due words':'Nothing due'))
+      el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return w.mastered;}).length}),el('div',{class:'muted small',text:'mastered'})),el('div',null,el('div',{class:'big',text:cdSaved()}),el('div',{class:'muted small',text:'of '+S.fileBank.size+' words covered'})),el('div',null,el('div',{class:'big',text:knownList().length}),el('div',{class:'muted small',text:'known on first sight'}))),
+    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Today\u2019s 50 words'),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:startReview},due.length?'Review due words':'Nothing due'))
   ));
 
   var list=el('div',null);
@@ -549,9 +550,10 @@ function closeReview(){S.rev=null;$('#review').hidden=true;render();}
 function renderWords(){
   var f=$('#wFilter');f.textContent='';
   var due=dueWords().length,all=S.words.filter(function(w){return !w.mastered;}).length,mas=S.words.filter(function(w){return w.mastered;}).length;
-  [['due','Due ('+due+')'],['all','All weak ('+all+')'],['mastered','Mastered ('+mas+')']].forEach(function(x){
+  [['due','Due ('+due+')'],['all','All weak ('+all+')'],['mastered','Mastered ('+mas+')'],['known','Known ('+knownList().length+')']].forEach(function(x){
     f.append(el('button',{type:'button','aria-pressed':S.wf===x[0]?'true':'false',onclick:function(){S.wf=x[0];renderWords();}},x[1]));
   });
+  if(S.wf==='known'){var lst=$('#wList');lst.textContent='';var q0=S.wq.trim().toLowerCase();var kw=knownList().filter(function(w){return !q0||w.indexOf(q0)>=0;});if(!kw.length)lst.append(el('div',{class:'card muted',text:'Words you mark Know in Cards appear here.'}));kw.slice().reverse().slice(0,300).forEach(function(w){var b=S.bank.get(w)||{};lst.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:w}),el('button',{class:'btn small ghost',type:'button',onclick:function(){addWord(w,b.m||'','',hookFor(w),b.src||'').then(function(ok){if(ok){var d={words:knownList().filter(function(y){return y!==w;})};S.meta.known=d;save('meta','known',d);toast(w+' moved to your weak bucket');}});}},'Move to weak')),b.m?el('p',{class:'small',text:b.m}):null));});return;}
   var t=today(),q=S.wq.trim().toLowerCase();
   var items=S.words.filter(function(w){
     if(S.wf==='due'&&(w.mastered||(w.due||t)>t))return false;
@@ -1090,89 +1092,131 @@ function renderRC(){
 function loadPassages(){fetch('passages.json').then(function(r){return r.ok?r.json():[];}).then(function(list){S.passages=Array.isArray(list)?list.sort(function(a,b){return a.day-b.day;}):[];schedule();}).catch(function(){});}
 
 /* ---------- flashcards ---------- */
-var DECKS=[['g','Gregmat'],['b333',"Barron's 333 high-frequency"],['pr','Princeton Hit Parade'],['econ','Economist GRE words'],['magoosh','Magoosh flashcards'],['b1100',"Barron's 1100"],['a','All words']];
-function deckWords(d){var out=[];S.fileBank.forEach(function(x){if(d==='a'||(x.l?x.l.indexOf(d)>=0:(d==='g'&&x.src==='Gregmat')))out.push(x);});return out;}
-function cdSaved(d){var m=S.meta.vocabpos||{};return parseInt(m[d],10)||0;}
-function cdPersist(){
-  var c=S.cd;if(c.stage!=='run'&&c.stage!=='done')return;
-  var pos=c.startIdx+(c.stage==='done'?c.list.length:c.i);
-  var o=Object.assign({},S.meta.vocabpos||{});
-  if(pos>(parseInt(o[c.deck],10)||0)){o[c.deck]=pos;S.meta.vocabpos=o;save('meta','vocabpos',o);}
-}
+function deckWords(){var out=[];S.fileBank.forEach(function(x){out.push(x);});return out;}
+function cdSaved(){var m=S.meta.vocabpos||{};return parseInt(m.a,10)||0;}
+function hookKey(w){return String(w).toLowerCase().replace(/[^a-z0-9]/g,'_');}
+function weakDoc(w){return S.words.filter(function(x){return (x.word||'').toLowerCase()===w;})[0];}
+function hookFor(w){var h=S.hooks[hookKey(w)];if(h&&h.own)return h.own;var ww=weakDoc(w);if(ww&&ww.own)return ww.own;var b=S.bank.get(w);return (b&&b.o)||'';}
+function knownList(){var k=S.meta.known;return (k&&Array.isArray(k.words))?k.words:[];}
 function speakWord(w){try{var u=new SpeechSynthesisUtterance(w);u.lang='en-US';window.speechSynthesis.cancel();window.speechSynthesis.speak(u);}catch(e){}}
 function cdStart(){
-  var c=S.cd,all=deckWords(c.deck);
-  var s=Math.max(0,Math.min(all.length-1,(c.start==null?cdSaved(c.deck)+1:c.start)-1));
-  var n=Math.max(1,Math.min(200,c.size||50));
-  var list=all.slice(s,s+n);
-  if(c.shuffle)list=shuffle(list);
-  if(!list.length){toast('No words at that position.');return;}
-  S.cd={stage:'run',deck:c.deck,size:n,shuffle:c.shuffle,list:list,i:0,knew:0,red:[],flip:false,startIdx:s,total:all.length,start:null};
+  var c=S.cd,all=deckWords(),n=Math.max(1,Math.min(200,c.size||50));
+  var due=dueWords().slice(0,n).map(function(w){var k=(w.word||'').toLowerCase(),b=S.bank.get(k)||{};return {w:k,m:w.meaning||b.m||'',s:w.syn||b.s||'',o:b.o||'',g:b.g||w.grp||'',ai:b.ai,src:w.src||b.src||'',rev:w.id};});
+  var s=Math.max(0,Math.min(all.length,(c.start==null?cdSaved()+1:c.start)-1));
+  var fresh=all.slice(s,s+(n-due.length)).map(function(x){return Object.assign({},x);});
+  if(c.shuffle)fresh=shuffle(fresh);
+  var list=due.concat(fresh);
+  if(!list.length){toast('Nothing left to revise.');return;}
+  S.cd={stage:'run',size:n,shuffle:c.shuffle,list:list,i:0,marks:{},orig:{},added:{},draft:{},flip:false,startIdx:s,fresh:fresh.length,nrev:due.length,total:all.length,start:null};
 }
-function cdNext(){
-  var c=S.cd;c.i++;c.flip=false;
-  if(c.i>=c.list.length){c.stage='done';cdPersist();}else if(c.i%10===0){cdPersist();}
+function cdPersist(){
+  var c=S.cd;if(c.stage!=='run'&&c.stage!=='done')return;
+  var adv=0;
+  if(c.stage==='done')adv=c.fresh;
+  else if(!c.shuffle){Object.keys(c.marks).forEach(function(k){var i=+k;if(i>=c.nrev)adv=Math.max(adv,i-c.nrev+1);});}
+  var pos=c.startIdx+adv,o=Object.assign({},S.meta.vocabpos||{});
+  if(pos>(parseInt(o.a,10)||0)){o.a=pos;S.meta.vocabpos=o;save('meta','vocabpos',o);}
+  var kn=knownList().slice(),set={},ch=false;kn.forEach(function(w){set[w]=1;});
+  Object.keys(c.marks).forEach(function(k){var x=c.list[+k];
+    if(!x.rev&&c.marks[k]==='k'&&!set[x.w]){kn.push(x.w);set[x.w]=1;ch=true;}
+    if(c.marks[k]==='r'&&set[x.w]){kn=kn.filter(function(y){return y!==x.w;});delete set[x.w];ch=true;}});
+  if(ch){var d={words:kn};S.meta.known=d;save('meta','known',d);}
+}
+function cdGo(j){
+  var c=S.cd;
+  if(j>=c.list.length){c.stage='done';cdPersist();renderCards();window.scrollTo(0,0);return;}
+  c.i=Math.max(0,j);c.flip=false;
+  if(c.i>0&&c.i%10===0)cdPersist();
   renderCards();
 }
 function cdAnswer(ok){
-  var c=S.cd,x=c.list[c.i];
-  if(ok){c.knew++;}
-  else{c.red.push(x.w);addWord(x.w,x.m||'','','',x.src||'');}
-  cdNext();
+  var c=S.cd,i=c.i,x=c.list[i],prev=c.marks[i],mk=ok?'k':'r';
+  if(prev!==mk){
+    if(x.rev){
+      var w=S.words.filter(function(y){return y.id===x.rev;})[0];
+      if(w){
+        if(!c.orig[i])c.orig[i]={box:w.box||0,seen:w.seen||0,misses:w.misses||0};
+        var o=c.orig[i],box=ok?Math.min(o.box+1,3):0;
+        patch('words',w.id,box>=3?{box:3,mastered:true,due:'',seen:o.seen+1}:{box:box,mastered:false,due:addDays(today(),INT[box]),seen:o.seen+1,misses:o.misses+(ok?0:1)});
+      }
+    }else if(mk==='r'){
+      if(!weakDoc(x.w))c.added[x.w]=1;
+      addWord(x.w,x.m||'','',hookFor(x.w),x.src||'');
+    }else if(prev==='r'&&c.added[x.w]){
+      var wd=weakDoc(x.w);if(wd){try{S.db.collection('words').doc(wd.id).delete();}catch(e){}}
+      delete c.added[x.w];
+    }
+    c.marks[i]=mk;
+  }
+  cdGo(i+1);
 }
 function renderCards(){
   var box=$('#cardsBody');if(!box)return;box.textContent='';
   var c=S.cd;
   if(!S.fileBank.size){box.append(el('div',{class:'card muted',text:'Loading your word bank...'}));return;}
   if(c.stage==='setup'){
-    var all=deckWords(c.deck),saved=cdSaved(c.deck);
-    var sel=el('select',{id:'cdDeck','aria-label':'Word set',onchange:function(){c.deck=this.value;c.start=null;renderCards();}},
-      DECKS.map(function(dk){return el('option',{value:dk[0],selected:c.deck===dk[0]?true:null},dk[1]+' ('+deckWords(dk[0]).length+')');}));
+    var all=deckWords(),saved=cdSaved(),due=dueWords().length,n=c.size||50;
     var st=el('input',{type:'number',id:'cdStart',min:'1',max:String(all.length),value:String(c.start==null?saved+1:c.start),oninput:function(){c.start=parseInt(this.value,10)||1;}});
-    var sz=el('input',{type:'number',id:'cdSize',min:'1',max:'200',value:String(c.size),oninput:function(){c.size=parseInt(this.value,10)||50;}});
+    var sz=el('input',{type:'number',id:'cdSize',min:'1',max:'200',value:String(n),oninput:function(){c.size=parseInt(this.value,10)||50;}});
     var sh=el('input',{type:'checkbox',id:'cdShuf',style:'width:auto',checked:c.shuffle?true:null,onchange:function(){c.shuffle=this.checked;}});
+    var nd=Math.min(due,n);
     box.append(el('div',{class:'card'},
-      el('h2',{text:'Word revision'}),
-      el('p',{class:'muted small',style:'margin:0',text:'Tap ✗ on any word you do not know and it goes into your weak bucket on its own. It comes back every 3 days. You have finished '+saved+' of '+all.length+' words in this set.'}),
-      el('label',null,'Word set',sel),
-      el('div',{class:'row'},el('label',null,'Start at word',st),el('label',null,'How many',sz)),
-      el('label',{style:'flex-direction:row;align-items:center;gap:8px'},sh,'Shuffle this batch'),
+      el('h2',{text:'Today’s '+n+' words'}),
+      el('p',{class:'small',style:'margin:0',text:nd?('This batch: '+nd+' weak word'+(nd===1?'':'s')+' due for revision, then '+(n-nd)+' new words.'):('This batch: '+n+' new words. Weak words you mark today come back in 3 days and are added to the front of the batch.')}),
+      el('p',{class:'muted small',style:'margin:0',text:'Covered so far: '+saved+' of '+all.length+' words (all lists combined, no duplicates).'}),
+      el('div',{class:'row'},el('label',null,'Start new words at',st),el('label',null,'Words per day',sz)),
+      el('label',{style:'flex-direction:row;align-items:center;gap:8px'},sh,'Shuffle the new words'),
       el('div',null,el('button',{class:'btn',type:'button',onclick:function(){cdStart();renderCards();}},'Start'))));
     return;
   }
   if(c.stage==='done'){
-    var chips=el('div',{class:'chips'});c.red.forEach(function(w){chips.append(el('span',{class:'chip bad',text:w}));});
+    var kn=0,red=[],rev=0;Object.keys(c.marks).forEach(function(k){var x=c.list[+k];if(x.rev)rev++;if(c.marks[k]==='k')kn++;else red.push(x.w);});
+    var chips=el('div',{class:'chips'});red.forEach(function(w){chips.append(el('span',{class:'chip bad',text:w}));});
     box.append(el('div',{class:'card'},
       el('h2',{text:'Batch finished'}),
-      el('p',{style:'margin:0',text:c.knew+' known, '+c.red.length+' added to your weak bucket.'}),
-      c.red.length?chips:null,
+      el('p',{style:'margin:0',text:kn+' known, '+red.length+' in your weak bucket'+(rev?(' ('+rev+' were weak-word revisions)'):'')+'.'}),
+      red.length?chips:null,
       el('div',{class:'row'},
-        el('button',{class:'btn',type:'button',onclick:function(){S.cd={stage:'setup',deck:c.deck,size:c.size,start:null,shuffle:c.shuffle};cdStart();renderCards();}},'Next '+c.size+' words'),
-        el('button',{class:'btn ghost',type:'button',onclick:function(){S.cd={stage:'setup',deck:c.deck,size:c.size,start:null,shuffle:c.shuffle};renderCards();}},'Back'))));
+        el('button',{class:'btn',type:'button',onclick:function(){S.cd={stage:'setup',size:c.size,start:null,shuffle:c.shuffle};cdStart();renderCards();}},'Next '+c.size+' words'),
+        el('button',{class:'btn ghost',type:'button',onclick:function(){S.cd={stage:'setup',size:c.size,start:null,shuffle:c.shuffle};renderCards();}},'Back to start'))));
     return;
   }
-  var x=c.list[c.i];
+  var i=c.i,x=c.list[i],mark=c.marks[i];
   function flip(){c.flip=!c.flip;renderCards();}
-  var fc=el('div',{class:'flashcard',role:'button',tabindex:'0','aria-label':'Show or hide the meaning',onclick:flip,onkeydown:function(e){if(e.key===' '||e.key==='Enter'){e.preventDefault();flip();}}},el('div',{class:'w',text:x.w}));
+  var fc=el('div',{class:'flashcard',role:'button',tabindex:'0','aria-label':'Show or hide the meaning',onclick:flip,onkeydown:function(e){if(e.key===' '||e.key==='Enter'){e.preventDefault();flip();}}},
+    x.rev?el('span',{class:'chip warn',text:'Weak word revision'}):null,el('div',{class:'w',text:x.w}));
   if(c.flip){
     if(x.m)fc.append(el('div',{class:'m',text:x.m}));
-    if(x.o)fc.append(el('div',{class:'h',text:x.o}));
+    var hk=hookFor(x.w);if(hk)fc.append(el('div',{class:'h',text:'Hook: '+hk}));
     if(x.s)fc.append(el('div',{class:'h',text:'Synonyms: '+x.s}));
     if(x.g&&S.groups.has(x.g)){var mt=S.groups.get(x.g).filter(function(y){return y!==x.w;}).slice(0,10);if(mt.length)fc.append(el('div',{class:'h small',text:'Same group: '+mt.join(', ')}));}
     if(x.ai)fc.append(el('div',{class:'muted small',text:'Meaning written by Claude'}));
-  }else{fc.append(el('div',{class:'muted small',text:'Tap the card to see the meaning'}));}
-  var slider=el('input',{type:'range',min:'1',max:String(c.list.length),value:String(c.i+1),'aria-label':'Jump to a word',onchange:function(){c.i=parseInt(this.value,10)-1;c.flip=false;renderCards();}});
+  }else fc.append(el('div',{class:'muted small',text:'Tap the card to see the meaning'}));
   var acts=el('div',{class:'row',style:'align-items:stretch'},
-    el('button',{class:'btn bad big',type:'button',onclick:function(){cdAnswer(false);}},'✗ Don’t know'),
+    el('button',{class:'btn bad big'+(mark==='r'?' picked':''),type:'button',onclick:function(){cdAnswer(false);}},'✗ Don’t know'),
     window.speechSynthesis?el('button',{class:'btn ghost',type:'button','aria-label':'Pronounce',onclick:function(){speakWord(x.w);}},'Listen'):null,
-    el('button',{class:'btn good big',type:'button',onclick:function(){cdAnswer(true);}},'✓ Know'));
+    el('button',{class:'btn good big'+(mark==='k'?' picked':''),type:'button',onclick:function(){cdAnswer(true);}},'✓ Know'));
+  var ta=el('textarea',{id:'cdHook','aria-label':'My memory hook',placeholder:'Write a mnemonic or your own meaning to remember this word'});
+  ta.value=c.draft[i]!=null?c.draft[i]:hookFor(x.w);
+  ta.addEventListener('input',function(){c.draft[i]=ta.value;});
+  var hookBox=el('div',{class:'list'},el('label',{for:'cdHook'},'My memory hook (mnemonic)'),ta,
+    el('div',null,el('button',{class:'btn small',type:'button',onclick:function(){
+      var v=(c.draft[i]!=null?c.draft[i]:ta.value).trim();
+      save('hooks',hookKey(x.w),{w:x.w,own:v}).then(function(ok){if(!ok)return;var wd=weakDoc(x.w);if(wd)patch('words',wd.id,{own:v});delete c.draft[i];toast('Hook saved');});
+    }},'Save hook')));
+  var slider=el('input',{type:'range',min:'1',max:String(c.list.length),value:String(i+1),'aria-label':'Jump to a word',onchange:function(){cdGo(parseInt(this.value,10)-1);}});
+  var pos=x.rev?'Revision '+(i+1)+' of '+c.nrev:'Word '+(c.startIdx+(c.shuffle?0:i-c.nrev)+1)+' of '+c.total;
   box.append(el('div',{class:'card'},
     el('div',{class:'row',style:'justify-content:space-between;align-items:center'},
-      el('span',{class:'muted small',text:'Word '+(c.startIdx+c.i+1)+' of '+c.total+' · '+(c.i+1)+' of '+c.list.length}),
-      el('span',null,c.i>0?el('button',{class:'btn small ghost',type:'button',onclick:function(){c.i--;c.flip=false;renderCards();}},'Back'):null,' ',
-        el('button',{class:'btn small ghost',type:'button',onclick:function(){cdPersist();S.cd={stage:'setup',deck:c.deck,size:c.size,start:null,shuffle:c.shuffle};renderCards();}},'Stop'))),
-    fc,acts,slider,
-    c.red.length?el('p',{class:'muted small',style:'margin:0',text:c.red.length+' in your weak bucket from this batch'}):null));
+      el('span',{class:'muted small',text:pos+' · '+(i+1)+' of '+c.list.length+' today'}),
+      el('button',{class:'btn small ghost',type:'button',onclick:function(){cdPersist();S.cd={stage:'setup',size:c.size,start:null,shuffle:c.shuffle};renderCards();}},'Stop')),
+    fc,
+    mark?el('p',{class:'muted small',style:'margin:0;text-align:center',text:'You marked this '+(mark==='k'?'Know':'Don’t know')+'. Tap the other button to change it; it will not be logged twice.'}):null,
+    acts,
+    el('div',{class:'row',style:'justify-content:space-between'},
+      el('button',{class:'btn small ghost',type:'button',disabled:i===0?true:null,onclick:function(){cdGo(i-1);}},'← Back'),
+      el('button',{class:'btn small ghost',type:'button',onclick:function(){cdGo(i+1);}},i===c.list.length-1?'Finish →':'Next →')),
+    slider,hookBox));
 }
 
 /* ---------- wiring ---------- */
@@ -1310,6 +1354,7 @@ function start(db){
   sub('quant',function(s){S.quant=rows(s);});
   sub('daily',function(s){S.daily={};s.docs.forEach(function(d){S.daily[d.id]=d.data();});});
   sub('meta',function(s){S.meta={};s.docs.forEach(function(d){S.meta[d.id]=d.data();});});
+  sub('hooks',function(s){S.hooks={};s.docs.forEach(function(d){S.hooks[d.id]=d.data();});});
   sub('bank',function(s){
     var m=new Map();
     s.docs.forEach(function(d){var ws=d.data().words;if(Array.isArray(ws))ws.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});});
