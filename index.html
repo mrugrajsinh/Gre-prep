@@ -408,6 +408,7 @@ function vAnalysis(){
 var raf=0;
 function schedule(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;render();});}
 function render(){
+  if(!S.bfDone&&S.db&&S.ready.meta&&S.ready.words&&S.fileBank.size){S.bfDone=true;var pos0=cdSaved();if(pos0>0&&!knownList().length){var weak={};S.words.forEach(function(w){weak[(w.word||'').toLowerCase()]=1;});var kn0=deckWords().slice(0,pos0).map(function(x){return x.w;}).filter(function(w){return !weak[w];});if(kn0.length){var d0={words:kn0};S.meta.known=d0;save('meta','known',d0);}}}
   $('#dateline').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   renderStatus();renderTabs();
   ['today','cards','words','articles','verbal','quant'].forEach(function(t){$('#s-'+t).hidden=(t!==S.tab);});
