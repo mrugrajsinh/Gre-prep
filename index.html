@@ -110,6 +110,16 @@ input[type=range]{padding:0;border:0;background:transparent}
 .blank{display:inline-block;min-width:4.5em;border-bottom:2px solid var(--accent);padding:0 4px;font-weight:600;color:var(--accent)}
 .blank.ok{color:var(--good);border-color:var(--good)}
 .blank.no{color:var(--bad);border-color:var(--bad)}
+.qinfo{text-align:center;margin:0;white-space:pre-line}
+.qcgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qcgrid>div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;text-align:center;min-width:0}
+.qcgrid p{margin:4px 0 0;overflow-wrap:anywhere}
+.qch{font-size:12px;font-weight:600;color:var(--muted);text-decoration:underline}
+.neinp{max-width:220px;font-size:17px}
+.dwrap{overflow-x:auto}
+.dtab{border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.dtab th,.dtab td{border:1px solid var(--line);padding:6px 10px;text-align:left}
+.dtab th{background:var(--accent-soft)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @media (max-width:480px){.barrow{grid-template-columns:90px 1fr 30px}}
 body{margin:0}img{max-width:100%}[hidden]{display:none!important}
@@ -229,6 +239,7 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
   </section>
 
   <section id="s-quant" hidden class="wrap" style="gap:14px">
+    <div id="qdBody" class="wrap" style="gap:14px"></div>
     <form id="qzForm" class="card">
       <h2>Log a quiz score</h2>
       <div class="row">
@@ -302,8 +313,8 @@ var REASON_TIPS={
  'Careless slip':'Slow down on the final check and re-read the question stem.'
 };
 var INT=[3,3,3];
-var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Reading: 1 passage with questions'],['t','TC/SC: daily drill done']];
-var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',deck:'g',size:50,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null};
+var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Reading: 1 passage with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
+var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',deck:'g',size:50,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null,qdrills:[],qd:null};
 function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
 function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
 
@@ -360,6 +371,7 @@ function dueWords(){var t=today();return S.words.filter(function(w){return !w.ma
 function qAnalysis(){
   var m={};
   S.quant.forEach(function(d){
+    if(d.kind==='qdrill'){var bt=d.byTopic||{};Object.keys(bt).forEach(function(k){var v=bt[k],tt=m[k]||(m[k]={topic:k,pcts:[],misses:0,types:{}});if(v[1])tt.pcts.push({d:d.date||'',p:Math.round(v[0]/v[1]*100)});});return;}
     var t=m[d.topic]||(m[d.topic]={topic:d.topic,pcts:[],misses:0,types:{}});
     if(d.kind==='quiz'&&typeof d.pct==='number')t.pcts.push({d:d.date||'',p:d.pct});
     if(d.kind==='miss'){t.misses++;var k=d.errType||'Other';t.types[k]=(t.types[k]||0)+1;}
@@ -444,9 +456,9 @@ function renderToday(){
   var week=el('div',{class:'week','aria-label':'Last 7 days'});
   for(var i=6;i>=0;i--){
     var d=addDays(t,-i),v=S.daily[d]||{},n=DAILY.filter(function(x){return v[x[0]];}).length;
-    week.append(el('span',{class:n===4?'on':(n>0?'part':''),title:d+': '+n+' of 4',text:String(+d.slice(8))}));
+    week.append(el('span',{class:n===DAILY.length?'on':(n>0?'part':''),title:d+': '+n+' of '+DAILY.length,text:String(+d.slice(8))}));
   }
-  body.append(el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('h2',{text:'Today’s plan'}),el('span',{class:'chip '+(done===4?'good':''),text:done+' of 4'})),list,week));
+  body.append(el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('h2',{text:'Today’s plan'}),el('span',{class:'chip '+(done===DAILY.length?'good':''),text:done+' of '+DAILY.length})),list,week));
 
   var nxp=rcNextPassage();
   if(S.passages.length){var dlg=rcLogs().filter(function(a){return a.date===t;});
@@ -458,6 +470,11 @@ function renderToday(){
     body.append(el('div',{class:'card'},el('h2',{text:'Daily TC/SC drill'}),
       dld.length?el('p',{style:'margin:0',text:'Done today: '+dld[0].type+' \u00b7 '+dld[0].correct+'/'+dld[0].total}):(nxd?el('p',{style:'margin:0',text:'Next: Drill '+nxd.day+' \u00b7 '+nxd.title}):null),
       nxd?el('div',null,el('button',{class:dld.length?'btn ghost':'btn',type:'button',onclick:function(){tcStart(nxd);}},dld.length?'Do another drill':'Start drill')):null));}
+  var nxq=qdNext();
+  if(S.qdrills.length){var dlq=qdLogs().filter(function(v){return v.date===t;});
+    body.append(el('div',{class:'card'},el('h2',{text:'Daily Quant drill (ETS style)'}),
+      dlq.length?el('p',{style:'margin:0',text:'Done today: Drill '+dlq[0].day+' \u00b7 '+dlq[0].correct+'/'+dlq[0].total}):(nxq?el('p',{style:'margin:0',text:'Next: Drill '+nxq.day+' \u00b7 '+nxq.title}):null),
+      nxq?el('div',null,el('button',{class:dlq.length?'btn ghost':'btn',type:'button',onclick:function(){qdStart(nxq);}},dlq.length?'Do another drill':'Start drill')):null));}
   var rows=qAnalysis().filter(function(r){return r.avg==null||r.avg<80||r.misses>=2;}).slice(0,3);
   var fc=el('div',{class:'card'},el('h2',{text:'Quant topics to fix first'}));
   if(!rows.length)fc.append(el('p',{class:'muted',style:'margin:0',text:'Log quiz scores and missed questions in the Quant tab and the weakest topics will appear here.'}));
@@ -619,6 +636,7 @@ function renderVerbal(){
 
 /* quant */
 function renderQuant(){
+  renderQD();
   var rows=qAnalysis(),st=$('#qStats');st.textContent='';
   var card=el('div',{class:'card'},el('h2',{text:'Weak topics, weakest first'}));
   if(!rows.length)card.append(el('p',{class:'muted',style:'margin:0',text:'Log quiz scores and missed questions. Topics under 80% or with repeated misses are ranked here with a method to try.'}));
@@ -634,6 +652,7 @@ function renderQuant(){
   st.append(card);
   var l=$('#qList');l.textContent='';
   S.quant.slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;}).slice(0,40).forEach(function(d){
+    if(d.kind==='qdrill'){l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:'ETS-style drill '+d.day}),el('span',{class:'chip '+pctClass(Math.round(d.correct/d.total*100)),text:d.correct+'/'+d.total})),el('span',{class:'muted small',text:nice(d.date)}),el('div',{class:'row'},el('button',{class:'btn small ghost',type:'button',onclick:function(){qdReview(d);}},'Review answers'),delBtn('quant',d.id))));return;}
     if(d.kind==='quiz'){
       l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:'Quiz · '+d.topic+(d.label?' · '+d.label:'')}),el('span',{class:'chip '+pctClass(d.pct),text:d.pct+'%'})),
         el('span',{class:'muted small',text:nice(d.date)+(d.total?' · '+d.correct+'/'+d.total:'')}),el('div',null,delBtn('quant',d.id))));
@@ -643,6 +662,102 @@ function renderQuant(){
     }
   });
 }
+
+/* ---------- Quant ETS-style drills ---------- */
+var QC_OPTS=['Quantity A is greater.','Quantity B is greater.','The two quantities are equal.','The relationship cannot be determined from the information given.'];
+var Q_ERR=['Concept gap','Set-up or translation','Formula forgotten','Graphing or diagram','Calculation slip','Careless','Skipped or ran out of time'];
+function qdLogs(){return S.quant.filter(function(v){return v.kind==='qdrill';});}
+function qdDoneMap(){var d={};qdLogs().forEach(function(v){if(v.did)d[v.did]=v;});return d;}
+function qdNext(){var d=qdDoneMap();for(var i=0;i<S.qdrills.length;i++){if(!d[S.qdrills[i].id])return S.qdrills[i];}return null;}
+function qdStart(d){S.qd={d:d,ans:{},done:false,t0:Date.now(),saved:{}};S.tab='quant';try{location.hash='quant';}catch(e){}render();window.scrollTo(0,0);}
+function qdNum(x){x=String(x==null?'':x).replace(/[,\s$]/g,'').replace(/−/g,'-');if(!x)return NaN;var m=x.match(/^(-?\d*\.?\d+)\/(-?\d*\.?\d+)$/);if(m)return parseFloat(m[1])/parseFloat(m[2]);return /^-?\d*\.?\d+$/.test(x)?parseFloat(x):NaN;}
+function qdIsRight(q,a){a=a||[];if(q.kind==='ne'){var v=qdNum(a[0]);return !isNaN(v)&&Math.abs(v-qdNum(q.value))<1e-9;}var x=a.slice().sort(),y=q.ans.slice().sort();return x.length===y.length&&x.every(function(v,i){return v===y[i];});}
+function qdTable(t){var tb=el('table',{class:'dtab'});var hr=el('tr');t.head.forEach(function(h){hr.append(el('th',{text:h}));});tb.append(el('thead',null,hr));var bd=el('tbody');t.rows.forEach(function(r){var tr=el('tr');r.forEach(function(c){tr.append(el('td',{text:c}));});bd.append(tr);});tb.append(bd);return el('div',{class:'dwrap'},el('p',{class:'muted small',style:'margin:0 0 6px',text:t.caption}),tb);}
+function qdSubmit(){
+  var r=S.qd;if(!r||r.done)return;var d=r.d;
+  r.secs=Math.round((Date.now()-r.t0)/1000);r.done=true;
+  var bt={},nc=0;
+  d.questions.forEach(function(q,i){var ok=qdIsRight(q,r.ans[i]);if(ok)nc++;var t=bt[q.topic]||[0,0];bt[q.topic]=[t[0]+(ok?1:0),t[1]+1];});
+  var answers={};Object.keys(r.ans).forEach(function(k){answers[k]=r.ans[k].map(function(x){return String(x);});});
+  var doc={kind:'qdrill',did:d.id,day:d.day,date:today(),correct:nc,total:d.questions.length,byTopic:bt,answers:answers,secs:r.secs};
+  renderQD();window.scrollTo(0,0);
+  save('quant',null,doc).then(function(ok){
+    if(!ok)return;toast('Drill saved: '+nc+'/'+d.questions.length);
+    var t=today(),cur=Object.assign({},S.daily[t]||{});if(!cur.d){cur.d=true;cur.date=t;S.daily[t]=cur;save('daily',t,cur);}
+  });
+}
+function qdReview(v){var dd=S.qdrills.filter(function(x){return x.id===v.did;})[0];if(!dd){toast('That drill is not loaded.');return;}var ans={};Object.keys(v.answers||{}).forEach(function(k){ans[k]=v.answers[k].map(function(x){return /^\d+$/.test(x)?parseInt(x,10):x;});});S.qd={d:dd,ans:ans,done:true,secs:v.secs||0,t0:0,saved:{}};S.tab='quant';render();window.scrollTo(0,0);}
+function renderQD(){
+  var box=$('#qdBody');if(!box)return;box.textContent='';
+  if(!S.qdrills.length){box.append(el('div',{class:'card muted',text:'Loading Quant drills...'}));return;}
+  var r=S.qd;
+  if(!r){
+    var nx=qdNext(),done=Object.keys(qdDoneMap()).length,t=today(),dl=qdLogs().filter(function(v){return v.date===t;});
+    var c=el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('h2',{text:'Daily ETS-style drill'}),el('span',{class:'chip',text:done+' of '+S.qdrills.length+' done'})),
+      el('p',{class:'muted small',style:'margin:0',text:'Ten questions in the official GRE formats: Quantitative Comparison, multiple choice, select all that apply, numeric entry and data tables. Your normal Gregmat parts stay as they are; this is extra exposure to test-style questions.'}));
+    if(dl.length)c.append(el('p',{class:'small',style:'margin:0',text:'Done today: '+dl.map(function(v){return 'Drill '+v.day+' ('+v.correct+'/'+v.total+')';}).join(', ')}));
+    if(nx)c.append(el('div',{class:'item'},el('span',{class:'muted small',text:'Drill '+nx.day+' · '+nx.questions.length+' questions'}),el('span',{class:'title',text:nx.title})),
+      el('div',null,el('button',{class:'btn',type:'button',onclick:function(){qdStart(nx);}},dl.length?'Do another drill':'Start today’s drill')));
+    else c.append(el('p',{class:'muted',style:'margin:0',text:'You have finished every drill in this set. Ask Claude to add the next batch.'}));
+    var past=qdLogs().slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;}).slice(0,8);
+    if(past.length){var pl=el('div',{class:'list'},el('h3',{text:'Past drills'}));past.forEach(function(v){pl.append(el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('span',{class:'small',text:nice(v.date)+' · Drill '+v.day+' · '+v.correct+'/'+v.total}),el('button',{class:'btn small ghost',type:'button',onclick:function(){qdReview(v);}},'Review')));});c.append(pl);}
+    box.append(c);return;
+  }
+  var d=r.d,qs=el('div',{class:'list'}),L='ABCDEF';
+  d.questions.forEach(function(q,qi){
+    var a=r.ans[qi]||[],ok=r.done&&qdIsRight(q,a),card=el('div',{class:'item'});
+    var label={qc:'Quantitative Comparison',mc:'Multiple choice',ma:'Select all that apply',ne:'Numeric entry'}[q.kind];
+    card.append(el('div',{class:'head'},el('span',{class:'muted small',text:'Question '+(qi+1)+' of '+d.questions.length+' · '+label+(r.done?' · '+q.topic:'')}),r.done?el('span',{class:'chip '+(ok?'good':'bad'),text:ok?'Correct':'Incorrect'}):null));
+    if(q.data)card.append(qdTable(q.data));
+    if(q.kind==='qc'){
+      if(q.info)card.append(el('p',{class:'qinfo',text:q.info}));
+      card.append(el('div',{class:'qcgrid'},el('div',null,el('span',{class:'qch',text:'Quantity A'}),el('p',{text:q.a})),el('div',null,el('span',{class:'qch',text:'Quantity B'}),el('p',{text:q.b}))));
+    }else card.append(el('p',{class:'qprompt',style:'white-space:pre-line;font-weight:400'},q.stem));
+    if(q.kind==='ne'){
+      var inp=el('input',{type:'text',inputmode:'decimal',class:'neinp','aria-label':'Your answer',placeholder:q.frac?'e.g. 3/8':'Enter a number',value:a[0]||'',disabled:r.done?true:null});
+      inp.value=a[0]||'';inp.addEventListener('input',function(){r.ans[qi]=[inp.value.trim()];});
+      card.append(inp);
+      if(r.done&&!ok)card.append(el('div',{class:'why ok',style:'padding-left:0',text:'Correct answer: '+q.value}));
+    }else{
+      var opts=el('div',{class:'opts'}),list=q.kind==='qc'?QC_OPTS:q.opts;
+      list.forEach(function(o,oi){
+        var picked=a.indexOf(oi)>=0,right=q.ans.indexOf(oi)>=0;
+        var cls='opt'+(picked?' sel':'')+(q.kind==='ma'?' sq':'');
+        if(r.done)cls+=right?' ok':(picked?' no':'');
+        opts.append(el('button',{class:cls,type:'button',disabled:r.done?true:null,onclick:function(){
+          var cur=(r.ans[qi]||[]).slice();
+          if(q.kind==='ma'){var k=cur.indexOf(oi);if(k>=0)cur.splice(k,1);else cur.push(oi);}else cur=[oi];
+          r.ans[qi]=cur;renderQD();}},el('span',{class:'letter',text:L[oi]}),el('span',{class:'otext',text:o})));
+      });
+      card.append(opts);
+    }
+    if(r.done){
+      card.append(el('div',{class:'tip',style:'white-space:pre-line',text:q.explain}));
+      if(!ok){
+        if(r.saved[qi])card.append(el('p',{class:'muted small',style:'margin:0',text:'Saved to your Quant mistake log.'}));
+        else{
+          var sel=el('select',{'aria-label':'Type of error'},Q_ERR.map(function(x){return el('option',{text:x});}));
+          card.append(el('div',{class:'row',style:'align-items:flex-end'},el('label',{style:'flex:1 1 200px'},'What went wrong?',sel),
+            el('button',{class:'btn small',type:'button',onclick:function(){
+              var stem=q.kind==='qc'?('A: '+q.a+' | B: '+q.b):q.stem;
+              save('quant',null,{kind:'miss',date:today(),topic:q.topic,ref:'ETS-style drill '+d.day+' · Q'+(qi+1),errType:sel.value,why:stem.slice(0,300),next:q.explain}).then(function(okk){if(okk){r.saved[qi]=true;renderQD();}});
+            }},'Log it')));
+        }
+      }
+    }
+    qs.append(card);
+  });
+  var foot;
+  if(!r.done){
+    foot=el('div',{class:'row',style:'align-items:center'},el('button',{class:'btn',type:'button',onclick:qdSubmit},'Submit drill'),el('span',{class:'muted small',text:'Unanswered questions count as wrong.'}),el('button',{class:'btn ghost small',type:'button',onclick:function(){S.qd=null;renderQD();}},'Leave'));
+  }else{
+    var nc=d.questions.filter(function(q,i){return qdIsRight(q,r.ans[i]);}).length;
+    foot=el('div',{class:'list'},el('div',{class:'row',style:'align-items:baseline'},el('span',{class:'big',text:nc+'/'+d.questions.length}),el('span',{class:'muted small',text:r.secs?('Time: '+fmtTime(r.secs)+' · GRE pace is about 1.75 minutes a question; with your extra time, about 3.5'):''})),
+      el('div',null,el('button',{class:'btn',type:'button',onclick:function(){S.qd=null;renderQD();window.scrollTo(0,0);}},'Done')));
+  }
+  box.append(el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('span',{class:'muted small',text:'ETS-style drill '+d.day}),r.done?el('span',{class:'chip',text:'Review'}):el('span',{class:'chip',id:'qdTimer',text:fmtTime(Math.floor((Date.now()-r.t0)/1000))})),el('h2',{text:d.title}),qs,foot));
+}
+function loadQDrills(){fetch('qdrills.json').then(function(r){return r.ok?r.json():[];}).then(function(list){S.qdrills=Array.isArray(list)?list.sort(function(a,b){return a.day-b.day;}):[];schedule();}).catch(function(){});}
 
 /* ---------- TC/SC drills ---------- */
 var TC_REASONS=['Missed a clue word','Vocabulary gap','Wrong sentence logic','Overthought it','Two-blank mismatch','Careless slip'];
@@ -1069,6 +1184,8 @@ function init(){
   loadBankFile();
   loadPassages();
   loadDrills();
+  loadQDrills();
+  setInterval(function(){if(S.qd&&!S.qd.done){var tm=document.getElementById('qdTimer');if(tm)tm.textContent=fmtTime(Math.floor((Date.now()-S.qd.t0)/1000));}},1000);
   setInterval(function(){if(S.tc&&!S.tc.done){var tm=document.getElementById('tcTimer');if(tm)tm.textContent=fmtTime(Math.floor((Date.now()-S.tc.t0)/1000));}},1000);
   setInterval(function(){if(S.rc&&!S.rc.done){var tm=document.getElementById('rcTimer');if(tm)tm.textContent=fmtTime(Math.floor((Date.now()-S.rc.t0)/1000));}},1000);
   connect();
