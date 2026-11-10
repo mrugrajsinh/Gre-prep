@@ -262,7 +262,7 @@ var REASON_TIPS={
  'Wrong passage reading':'Point to the exact line that supports the answer before you pick it.',
  'Careless slip':'Slow down on the final check and re-read the question stem.'
 };
-var INT=[1,3,7,14,30];
+var INT=[3,3,3];
 var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Article: 1 reviewed and rated'],['t','TC/SC: 2 to 3 sets done']];
 var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false};
 
@@ -437,7 +437,7 @@ function renderReview(){
   box.hidden=false;
   if(r.i>=r.q.length){
     box.append(el('h2',{text:'Review finished'}),
-      el('p',{text:r.knew+' remembered, '+r.missed+' missed. Missed words come back tomorrow, then on a 3, 7, 14 and 30 day schedule.'}),
+      el('p',{text:r.knew+' remembered, '+r.missed+' missed. Every word comes back in 3 days. A word is mastered after 3 right answers in a row, and a miss starts it over.'}),
       el('div',null,el('button',{class:'btn',type:'button',onclick:closeReview},'Done')));
     return;
   }
@@ -459,8 +459,8 @@ function renderReview(){
 }
 async function answer(ok){
   var r=S.rev;if(!r||r.busy)return;r.busy=true;
-  var w=r.q[r.i],box=ok?Math.min((w.box||0)+1,5):0,upd;
-  if(box>=5)upd={box:5,mastered:true,due:'',seen:(w.seen||0)+1};
+  var w=r.q[r.i],box=ok?Math.min((w.box||0)+1,3):0,upd;
+  if(box>=3)upd={box:3,mastered:true,due:'',seen:(w.seen||0)+1};
   else upd={box:box,mastered:false,due:addDays(today(),INT[box]),seen:(w.seen||0)+1,misses:(w.misses||0)+(ok?0:1)};
   await patch('words',w.id,upd);
   if(ok)r.knew++;else r.missed++;
@@ -484,11 +484,11 @@ function renderWords(){
   }).sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:(a.word<b.word?-1:1));});
   var list=$('#wList');list.textContent='';
   if(!items.length){
-    list.append(el('div',{class:'card muted',text:S.wf==='due'?'No words are due. Add the red words from your revision above and they will come back after 1, 3, 7, 14 and 30 days.':'Nothing here yet.'}));
+    list.append(el('div',{class:'card muted',text:S.wf==='due'?'No words are due. Add the red words from your revision above and they will come back every 3 days until you get them right 3 times in a row.':'Nothing here yet.'}));
     return;
   }
   items.forEach(function(w){
-    var pips=el('span',{class:'pips'});for(var i=0;i<5;i++)pips.append(el('i',{class:i<(w.box||0)?'on':''}));
+    var pips=el('span',{class:'pips'});for(var i=0;i<3;i++)pips.append(el('i',{class:i<(w.box||0)?'on':''}));
     var d=el('details',{open:S.open.has(w.id)?true:null});
     d.addEventListener('toggle',function(){if(d.open)S.open.add(w.id);else S.open.delete(w.id);});
     var own=el('textarea',{'aria-label':'My own meaning for '+w.word},w.own||'');own.value=w.own||'';
@@ -497,7 +497,7 @@ function renderWords(){
       el('label',null,'GRE meaning',mean),el('label',null,'My own meaning or memory hook',own),
       el('div',{class:'row'},
         el('button',{class:'btn small',type:'button',onclick:async function(){if(await patch('words',w.id,{meaning:mean.value.trim(),own:own.value.trim()}))toast('Saved');}},'Save notes'),
-        w.mastered?el('button',{class:'btn small ghost',type:'button',onclick:function(){patch('words',w.id,{mastered:false,box:0,due:addDays(today(),1)});}},'Bring back'):el('button',{class:'btn small ghost',type:'button',onclick:function(){patch('words',w.id,{due:today()});}},'Review today'),
+        w.mastered?el('button',{class:'btn small ghost',type:'button',onclick:function(){patch('words',w.id,{mastered:false,box:0,due:addDays(today(),3)});}},'Bring back'):el('button',{class:'btn small ghost',type:'button',onclick:function(){patch('words',w.id,{due:today()});}},'Review today'),
         delBtn('words',w.id)));
     list.append(el('div',{class:'item'},
       el('div',{class:'head'},el('span',{class:'title',text:w.word}),el('span',null,pips,' ',el('span',{class:'muted small',text:w.mastered?'mastered':(((w.due||t)<=t)?'due now':'next '+nice(w.due))}))),
@@ -508,12 +508,12 @@ function renderWords(){
 }
 function wordDoc(word,meaning,syn,own,src){
   var b=S.bank.get(word.toLowerCase());
-  return {word:word,meaning:meaning||(b&&b.m)||'',syn:syn||(b&&b.s)||'',own:own||'',src:src||(b&&b.src)||'',box:0,due:addDays(today(),1),added:today(),seen:0,misses:0,mastered:false};
+  return {word:word,meaning:meaning||(b&&b.m)||'',syn:syn||(b&&b.s)||'',own:own||'',src:src||(b&&b.src)||'',box:0,due:addDays(today(),3),added:today(),seen:0,misses:0,mastered:false};
 }
 async function addWord(word,meaning,syn,own,src){
   word=word.trim().toLowerCase();if(!word)return false;
   var ex=S.words.filter(function(w){return (w.word||'').toLowerCase()===word;})[0];
-  if(ex){return patch('words',ex.id,{box:0,mastered:false,due:addDays(today(),1),misses:(ex.misses||0)+1,meaning:meaning||ex.meaning||'',syn:syn||ex.syn||'',own:own||ex.own||''});}
+  if(ex){return patch('words',ex.id,{box:0,mastered:false,due:addDays(today(),3),misses:(ex.misses||0)+1,meaning:meaning||ex.meaning||'',syn:syn||ex.syn||'',own:own||ex.own||''});}
   return save('words',null,wordDoc(word,meaning,syn,own,src));
 }
 
@@ -599,7 +599,7 @@ function init(){
   $('#wForm').addEventListener('submit',async function(e){
     e.preventDefault();
     if(await addWord(val('wWord'),val('wMeaning').trim(),val('wSyn').trim(),val('wOwn').trim(),val('wSrc'))){
-      toast('Saved. It comes back tomorrow.');e.target.reset();$('#wHint').textContent='';
+      toast('Saved. It comes back in 3 days.');e.target.reset();$('#wHint').textContent='';
     }
   });
   $('#wBulkGo').addEventListener('click',async function(){
