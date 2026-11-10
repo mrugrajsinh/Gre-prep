@@ -765,7 +765,8 @@ function renderRC(){
 function loadPassages(){fetch('passages.json').then(function(r){return r.ok?r.json():[];}).then(function(list){S.passages=Array.isArray(list)?list.sort(function(a,b){return a.day-b.day;}):[];schedule();}).catch(function(){});}
 
 /* ---------- flashcards ---------- */
-function deckWords(d){var out=[];S.fileBank.forEach(function(x){if(d==='a'||x.src==='Gregmat')out.push(x);});return out;}
+var DECKS=[['g','Gregmat'],['b333',"Barron's 333 high-frequency"],['pr','Princeton Hit Parade'],['econ','Economist GRE words'],['magoosh','Magoosh flashcards'],['b1100',"Barron's 1100"],['a','All words']];
+function deckWords(d){var out=[];S.fileBank.forEach(function(x){if(d==='a'||(x.l?x.l.indexOf(d)>=0:(d==='g'&&x.src==='Gregmat')))out.push(x);});return out;}
 function cdSaved(d){var m=S.meta.vocabpos||{};return parseInt(m[d],10)||0;}
 function cdPersist(){
   var c=S.cd;if(c.stage!=='run'&&c.stage!=='done')return;
@@ -801,8 +802,7 @@ function renderCards(){
   if(c.stage==='setup'){
     var all=deckWords(c.deck),saved=cdSaved(c.deck);
     var sel=el('select',{id:'cdDeck','aria-label':'Word set',onchange:function(){c.deck=this.value;c.start=null;renderCards();}},
-      el('option',{value:'g',selected:c.deck==='g'?true:null},'Gregmat words ('+deckWords('g').length+')'),
-      el('option',{value:'a',selected:c.deck==='a'?true:null},'All words with extras ('+deckWords('a').length+')'));
+      DECKS.map(function(dk){return el('option',{value:dk[0],selected:c.deck===dk[0]?true:null},dk[1]+' ('+deckWords(dk[0]).length+')');}));
     var st=el('input',{type:'number',id:'cdStart',min:'1',max:String(all.length),value:String(c.start==null?saved+1:c.start),oninput:function(){c.start=parseInt(this.value,10)||1;}});
     var sz=el('input',{type:'number',id:'cdSize',min:'1',max:'200',value:String(c.size),oninput:function(){c.size=parseInt(this.value,10)||50;}});
     var sh=el('input',{type:'checkbox',id:'cdShuf',style:'width:auto',checked:c.shuffle?true:null,onchange:function(){c.shuffle=this.checked;}});
