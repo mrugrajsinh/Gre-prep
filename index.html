@@ -264,7 +264,9 @@ var REASON_TIPS={
 };
 var INT=[3,3,3];
 var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Article: 1 reviewed and rated'],['t','TC/SC: 2 to 3 sets done']];
-var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false};
+var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map()};
+function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
+function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
 
 function $(s,r){return (r||document).querySelector(s);}
 function el(tag,attrs){
@@ -451,6 +453,7 @@ function renderReview(){
   var info=el('div',{class:'list'});
   if(w.meaning)info.append(el('div',{class:'item'},el('span',{class:'muted small',text:'GRE meaning'}),el('p',{text:w.meaning})));
   if(w.syn)info.append(el('div',{class:'item'},el('span',{class:'muted small',text:'Synonyms'}),el('p',{text:w.syn})));
+  if(w.grp&&S.groups.has(w.grp)){var mates=S.groups.get(w.grp).filter(function(x){return x!==w.word;}).slice(0,12);if(mates.length)info.append(el('div',{class:'item'},el('span',{class:'muted small',text:'Same group: '+w.grp}),el('p',{text:mates.join(', ')})));}
   if(w.own)info.append(el('div',{class:'item'},el('span',{class:'muted small',text:'My own meaning'}),el('p',{text:w.own})));
   if(!w.meaning&&!w.syn&&!w.own)info.append(el('p',{class:'muted',text:'No meaning saved yet. Add one in the Words tab.'}));
   box.append(info,el('div',{class:'row'},
@@ -508,7 +511,7 @@ function renderWords(){
 }
 function wordDoc(word,meaning,syn,own,src){
   var b=S.bank.get(word.toLowerCase());
-  return {word:word,meaning:meaning||(b&&b.m)||'',syn:syn||(b&&b.s)||'',own:own||'',src:src||(b&&b.src)||'',box:0,due:addDays(today(),3),added:today(),seen:0,misses:0,mastered:false};
+  return {word:word,meaning:meaning||(b&&b.m)||'',syn:syn||(b&&b.s)||'',own:own||(b&&b.o)||'',grp:(b&&b.g)||'',src:src||(b&&b.src)||'',box:0,due:addDays(today(),3),added:today(),seen:0,misses:0,mastered:false};
 }
 async function addWord(word,meaning,syn,own,src){
   word=word.trim().toLowerCase();if(!word)return false;
@@ -592,7 +595,7 @@ function init(){
   var wInput=$('#wWord');
   function lookup(){
     var b=S.bank.get(wInput.value.trim().toLowerCase()),h=$('#wHint');
-    if(b){if(!val('wMeaning'))$('#wMeaning').value=b.m||'';if(!val('wSyn'))$('#wSyn').value=b.s||'';h.textContent='Found in your '+(b.src||'word list')+'.';}
+    if(b){if(!val('wMeaning'))$('#wMeaning').value=b.m||'';if(!val('wSyn'))$('#wSyn').value=b.s||'';if(!val('wOwn'))$('#wOwn').value=b.o||'';h.textContent='Found in your '+(b.src||'word list')+(b.ai?' (meaning written by Claude, please check it).':'.');}
     else h.textContent=S.bank.size?'Not in your word lists. Add the meaning yourself.':'';
   }
   wInput.addEventListener('change',lookup);wInput.addEventListener('blur',lookup);
@@ -675,6 +678,7 @@ function init(){
   window.addEventListener('hashchange',function(){var x=(location.hash||'').replace('#','');if(['today','words','articles','verbal','quant'].indexOf(x)>=0&&x!==S.tab){S.tab=x;render();}});
   render();
   setTimeout(function(){S.timedOut=true;schedule();},10000);
+  loadBankFile();
   connect();
 }
 var started=false;
@@ -702,7 +706,7 @@ function start(db){
   sub('bank',function(s){
     var m=new Map();
     s.docs.forEach(function(d){var ws=d.data().words;if(Array.isArray(ws))ws.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});});
-    S.bank=m;
+    S.dbBank=m;rebuildBank();
   });
 }
 init();
