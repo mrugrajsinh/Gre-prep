@@ -469,12 +469,12 @@ function renderToday(){
   if(S.drills.length){var dld=tcLogs().filter(function(v){return v.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily TC/SC drill'}),
       dld.length?el('p',{style:'margin:0',text:'Done today: '+dld[0].type+' \u00b7 '+dld[0].correct+'/'+dld[0].total}):(nxd?el('p',{style:'margin:0',text:'Next: Drill '+nxd.day+' \u00b7 '+nxd.title}):null),
-      nxd?el('div',null,el('button',{class:dld.length?'btn ghost':'btn',type:'button',onclick:function(){tcStart(nxd);}},dld.length?'Do another drill':'Start drill')):null));}
+      nxd?el('div',null,el('button',{class:dld.length?'btn ghost':'btn',type:'button',onclick:function(){tcStart(nxd,tcParts(nxd.id).a?'b':null);}},dld.length?'Do another drill':'Start drill')):null));}
   var nxq=qdNext();
   if(S.qdrills.length){var dlq=qdLogs().filter(function(v){return v.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily Quant drill (ETS style)'}),
       dlq.length?el('p',{style:'margin:0',text:'Done today: Drill '+dlq[0].day+' \u00b7 '+dlq[0].correct+'/'+dlq[0].total}):(nxq?el('p',{style:'margin:0',text:'Next: Drill '+nxq.day+' \u00b7 '+nxq.title}):null),
-      nxq?el('div',null,el('button',{class:dlq.length?'btn ghost':'btn',type:'button',onclick:function(){qdStart(nxq);}},dlq.length?'Do another drill':'Start drill')):null));}
+      nxq?el('div',null,el('button',{class:dlq.length?'btn ghost':'btn',type:'button',onclick:function(){qdStart(nxq,qdParts(nxq.id).a?'b':null);}},dlq.length?'Do another drill':'Start drill')):null));}
   var rows=qAnalysis().filter(function(r){return r.avg==null||r.avg<80||r.misses>=2;}).slice(0,3);
   var fc=el('div',{class:'card'},el('h2',{text:'Quant topics to fix first'}));
   if(!rows.length)fc.append(el('p',{class:'muted',style:'margin:0',text:'Log quiz scores and missed questions in the Quant tab and the weakest topics will appear here.'}));
@@ -664,12 +664,20 @@ function renderQuant(){
 }
 
 /* ---------- Quant ETS-style drills ---------- */
+function qRange(n,part){var a=[],h=Math.ceil(n/2);for(var i=0;i<n;i++){if(!part||(part==='a'?i<h:i>=h))a.push(i);}return a;}
+function drillButtons(nx,parts,start,dlen){
+  if(parts.a&&!parts.b)return el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){start(nx,'b');}},'Finish this drill (last 5)'));
+  return el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){start(nx,null);}},dlen?'Do another drill (10)':'Full drill (10)'),el('button',{class:'btn ghost',type:'button',onclick:function(){start(nx,'a');}},'Quick 5 (rough day)'));
+}
+function partsOf(logs,id){var p={};logs.forEach(function(v){if(v.did===id){if(v.part)p[v.part]=1;else{p.a=1;p.b=1;}}});return p;}
+
 var QC_OPTS=['Quantity A is greater.','Quantity B is greater.','The two quantities are equal.','The relationship cannot be determined from the information given.'];
 var Q_ERR=['Concept gap','Set-up or translation','Formula forgotten','Graphing or diagram','Calculation slip','Careless','Skipped or ran out of time'];
 function qdLogs(){return S.quant.filter(function(v){return v.kind==='qdrill';});}
-function qdDoneMap(){var d={};qdLogs().forEach(function(v){if(v.did)d[v.did]=v;});return d;}
+function qdParts(id){return partsOf(qdLogs(),id);}
+function qdDoneMap(){var d={},L=qdLogs();L.forEach(function(v){if(v.did){var p=partsOf(L,v.did);if(p.a&&p.b)d[v.did]=v;}});return d;}
 function qdNext(){var d=qdDoneMap();for(var i=0;i<S.qdrills.length;i++){if(!d[S.qdrills[i].id])return S.qdrills[i];}return null;}
-function qdStart(d){S.qd={d:d,ans:{},done:false,t0:Date.now(),saved:{}};S.tab='quant';try{location.hash='quant';}catch(e){}render();window.scrollTo(0,0);}
+function qdStart(d,part){S.qd={d:d,ans:{},done:false,t0:Date.now(),saved:{},part:part||null,idx:qRange(d.questions.length,part)};S.tab='quant';try{location.hash='quant';}catch(e){}render();window.scrollTo(0,0);}
 function qdNum(x){x=String(x==null?'':x).replace(/[,\s$]/g,'').replace(/−/g,'-');if(!x)return NaN;var m=x.match(/^(-?\d*\.?\d+)\/(-?\d*\.?\d+)$/);if(m)return parseFloat(m[1])/parseFloat(m[2]);return /^-?\d*\.?\d+$/.test(x)?parseFloat(x):NaN;}
 function qdIsRight(q,a){a=a||[];if(q.kind==='ne'){var v=qdNum(a[0]);return !isNaN(v)&&Math.abs(v-qdNum(q.value))<1e-9;}var x=a.slice().sort(),y=q.ans.slice().sort();return x.length===y.length&&x.every(function(v,i){return v===y[i];});}
 function qdTable(t){var tb=el('table',{class:'dtab'});var hr=el('tr');t.head.forEach(function(h){hr.append(el('th',{text:h}));});tb.append(el('thead',null,hr));var bd=el('tbody');t.rows.forEach(function(r){var tr=el('tr');r.forEach(function(c){tr.append(el('td',{text:c}));});bd.append(tr);});tb.append(bd);return el('div',{class:'dwrap'},el('p',{class:'muted small',style:'margin:0 0 6px',text:t.caption}),tb);}
@@ -677,16 +685,16 @@ function qdSubmit(){
   var r=S.qd;if(!r||r.done)return;var d=r.d;
   r.secs=Math.round((Date.now()-r.t0)/1000);r.done=true;
   var bt={},nc=0;
-  d.questions.forEach(function(q,i){var ok=qdIsRight(q,r.ans[i]);if(ok)nc++;var t=bt[q.topic]||[0,0];bt[q.topic]=[t[0]+(ok?1:0),t[1]+1];});
+  d.questions.forEach(function(q,i){if(r.idx.indexOf(i)<0)return;var ok=qdIsRight(q,r.ans[i]);if(ok)nc++;var t=bt[q.topic]||[0,0];bt[q.topic]=[t[0]+(ok?1:0),t[1]+1];});
   var answers={};Object.keys(r.ans).forEach(function(k){answers[k]=r.ans[k].map(function(x){return String(x);});});
-  var doc={kind:'qdrill',did:d.id,day:d.day,date:today(),correct:nc,total:d.questions.length,byTopic:bt,answers:answers,secs:r.secs};
+  var doc={kind:'qdrill',did:d.id,day:d.day,date:today(),part:r.part||null,correct:nc,total:r.idx.length,byTopic:bt,answers:answers,secs:r.secs};
   renderQD();window.scrollTo(0,0);
   save('quant',null,doc).then(function(ok){
-    if(!ok)return;toast('Drill saved: '+nc+'/'+d.questions.length);
+    if(!ok)return;toast('Drill saved: '+nc+'/'+r.idx.length);
     var t=today(),cur=Object.assign({},S.daily[t]||{});if(!cur.d){cur.d=true;cur.date=t;S.daily[t]=cur;save('daily',t,cur);}
   });
 }
-function qdReview(v){var dd=S.qdrills.filter(function(x){return x.id===v.did;})[0];if(!dd){toast('That drill is not loaded.');return;}var ans={};Object.keys(v.answers||{}).forEach(function(k){ans[k]=v.answers[k].map(function(x){return /^\d+$/.test(x)?parseInt(x,10):x;});});S.qd={d:dd,ans:ans,done:true,secs:v.secs||0,t0:0,saved:{}};S.tab='quant';render();window.scrollTo(0,0);}
+function qdReview(v){var dd=S.qdrills.filter(function(x){return x.id===v.did;})[0];if(!dd){toast('That drill is not loaded.');return;}var ans={};Object.keys(v.answers||{}).forEach(function(k){ans[k]=v.answers[k].map(function(x){return /^\d+$/.test(x)?parseInt(x,10):x;});});S.qd={d:dd,ans:ans,done:true,secs:v.secs||0,t0:0,saved:{},part:v.part||null,idx:qRange(dd.questions.length,v.part)};S.tab='quant';render();window.scrollTo(0,0);}
 function renderQD(){
   var box=$('#qdBody');if(!box)return;box.textContent='';
   if(!S.qdrills.length){box.append(el('div',{class:'card muted',text:'Loading Quant drills...'}));return;}
@@ -697,7 +705,7 @@ function renderQD(){
       el('p',{class:'muted small',style:'margin:0',text:'Ten questions in the official GRE formats: Quantitative Comparison, multiple choice, select all that apply, numeric entry and data tables. Your normal Gregmat parts stay as they are; this is extra exposure to test-style questions.'}));
     if(dl.length)c.append(el('p',{class:'small',style:'margin:0',text:'Done today: '+dl.map(function(v){return 'Drill '+v.day+' ('+v.correct+'/'+v.total+')';}).join(', ')}));
     if(nx)c.append(el('div',{class:'item'},el('span',{class:'muted small',text:'Drill '+nx.day+' · '+nx.questions.length+' questions'}),el('span',{class:'title',text:nx.title})),
-      el('div',null,el('button',{class:'btn',type:'button',onclick:function(){qdStart(nx);}},dl.length?'Do another drill':'Start today’s drill')));
+      (qdParts(nx.id).a?el('p',{class:'muted small',style:'margin:0',text:'First 5 questions done on a quick day.'}):null),drillButtons(nx,qdParts(nx.id),qdStart,dl.length));
     else c.append(el('p',{class:'muted',style:'margin:0',text:'You have finished every drill in this set. Ask Claude to add the next batch.'}));
     var past=qdLogs().slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;}).slice(0,8);
     if(past.length){var pl=el('div',{class:'list'},el('h3',{text:'Past drills'}));past.forEach(function(v){pl.append(el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('span',{class:'small',text:nice(v.date)+' · Drill '+v.day+' · '+v.correct+'/'+v.total}),el('button',{class:'btn small ghost',type:'button',onclick:function(){qdReview(v);}},'Review')));});c.append(pl);}
@@ -705,6 +713,7 @@ function renderQD(){
   }
   var d=r.d,qs=el('div',{class:'list'}),L='ABCDEF';
   d.questions.forEach(function(q,qi){
+    if(r.idx.indexOf(qi)<0)return;
     var a=r.ans[qi]||[],ok=r.done&&qdIsRight(q,a),card=el('div',{class:'item'});
     var label={qc:'Quantitative Comparison',mc:'Multiple choice',ma:'Select all that apply',ne:'Numeric entry'}[q.kind];
     card.append(el('div',{class:'head'},el('span',{class:'muted small',text:'Question '+(qi+1)+' of '+d.questions.length+' · '+label+(r.done?' · '+q.topic:'')}),r.done?el('span',{class:'chip '+(ok?'good':'bad'),text:ok?'Correct':'Incorrect'}):null));
@@ -751,8 +760,8 @@ function renderQD(){
   if(!r.done){
     foot=el('div',{class:'row',style:'align-items:center'},el('button',{class:'btn',type:'button',onclick:qdSubmit},'Submit drill'),el('span',{class:'muted small',text:'Unanswered questions count as wrong.'}),el('button',{class:'btn ghost small',type:'button',onclick:function(){S.qd=null;renderQD();}},'Leave'));
   }else{
-    var nc=d.questions.filter(function(q,i){return qdIsRight(q,r.ans[i]);}).length;
-    foot=el('div',{class:'list'},el('div',{class:'row',style:'align-items:baseline'},el('span',{class:'big',text:nc+'/'+d.questions.length}),el('span',{class:'muted small',text:r.secs?('Time: '+fmtTime(r.secs)+' · GRE pace is about 1.75 minutes a question; with your extra time, about 3.5'):''})),
+    var nc=d.questions.filter(function(q,i){return r.idx.indexOf(i)>=0&&qdIsRight(q,r.ans[i]);}).length;
+    foot=el('div',{class:'list'},el('div',{class:'row',style:'align-items:baseline'},el('span',{class:'big',text:nc+'/'+r.idx.length}),el('span',{class:'muted small',text:r.secs?('Time: '+fmtTime(r.secs)+' · GRE pace is about 1.75 minutes a question; with your extra time, about 3.5'):''})),
       el('div',null,el('button',{class:'btn',type:'button',onclick:function(){S.qd=null;renderQD();window.scrollTo(0,0);}},'Done')));
   }
   box.append(el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('span',{class:'muted small',text:'ETS-style drill '+d.day}),r.done?el('span',{class:'chip',text:'Review'}):el('span',{class:'chip',id:'qdTimer',text:fmtTime(Math.floor((Date.now()-r.t0)/1000))})),el('h2',{text:d.title}),qs,foot));
@@ -763,9 +772,10 @@ function loadQDrills(){fetch('qdrills.json').then(function(r){return r.ok?r.json
 var TC_REASONS=['Missed a clue word','Vocabulary gap','Wrong sentence logic','Overthought it','Two-blank mismatch','Careless slip'];
 var ROMAN=['i','ii','iii'];
 function tcLogs(){return S.verbal.filter(function(v){return v.kind==='drill';});}
-function tcDoneMap(){var d={};tcLogs().forEach(function(v){if(v.did)d[v.did]=v;});return d;}
+function tcParts(id){return partsOf(tcLogs(),id);}
+function tcDoneMap(){var d={},L=tcLogs();L.forEach(function(v){if(v.did){var p=partsOf(L,v.did);if(p.a&&p.b)d[v.did]=v;}});return d;}
 function tcNext(){var d=tcDoneMap();for(var i=0;i<S.drills.length;i++){if(!d[S.drills[i].id])return S.drills[i];}return null;}
-function tcStart(d){S.tc={d:d,ans:{},done:false,t0:Date.now(),saved:{}};S.tab='verbal';try{location.hash='verbal';}catch(e){}render();window.scrollTo(0,0);}
+function tcStart(d,part){S.tc={d:d,ans:{},done:false,t0:Date.now(),saved:{},part:part||null,idx:qRange(d.questions.length,part)};S.tab='verbal';try{location.hash='verbal';}catch(e){}render();window.scrollTo(0,0);}
 function tcIsRight(q,a){a=a||[];if(q.kind==='se'){var x=a.slice().sort();return x.length===2&&x[0]===q.ans[0]&&x[1]===q.ans[1];}return q.ans.every(function(v,i){return a[i]===v;});}
 function tcWordOf(q,a,bi){return (a&&a[bi]!=null&&q.kind!=='se')?q.blanks[bi][a[bi]]:null;}
 function tcSentence(q,a,showRight){
@@ -785,16 +795,16 @@ function tcSubmit(){
   var r=S.tc;if(!r||r.done)return;var d=r.d;
   r.secs=Math.round((Date.now()-r.t0)/1000);r.done=true;
   var bt={},nc=0;
-  d.questions.forEach(function(q,i){var ok=tcIsRight(q,r.ans[i]);if(ok)nc++;var t=bt[q.type]||[0,0];bt[q.type]=[t[0]+(ok?1:0),t[1]+1];});
+  d.questions.forEach(function(q,i){if(r.idx.indexOf(i)<0)return;var ok=tcIsRight(q,r.ans[i]);if(ok)nc++;var t=bt[q.type]||[0,0];bt[q.type]=[t[0]+(ok?1:0),t[1]+1];});
   var answers={};Object.keys(r.ans).forEach(function(k){answers[k]=r.ans[k].map(function(x){return x==null?-1:x;});});
-  var doc={kind:'drill',did:d.id,day:d.day,date:today(),type:'Drill '+d.day,correct:nc,total:d.questions.length,byType:bt,answers:answers,secs:r.secs};
+  var doc={kind:'drill',did:d.id,day:d.day,date:today(),type:'Drill '+d.day+(r.part?' (part '+(r.part==='a'?1:2)+')':''),part:r.part||null,correct:nc,total:r.idx.length,byType:bt,answers:answers,secs:r.secs};
   renderTC();window.scrollTo(0,0);
   save('verbal',null,doc).then(function(ok){
-    if(!ok)return;toast('Drill saved: '+nc+'/'+d.questions.length);
+    if(!ok)return;toast('Drill saved: '+nc+'/'+r.idx.length);
     var t=today(),cur=Object.assign({},S.daily[t]||{});if(!cur.t){cur.t=true;cur.date=t;S.daily[t]=cur;save('daily',t,cur);}
   });
 }
-function tcReview(v){var dd=S.drills.filter(function(x){return x.id===v.did;})[0];if(!dd){toast('That drill is not loaded.');return;}var ans={};Object.keys(v.answers||{}).forEach(function(k){ans[k]=v.answers[k].map(function(x){return x<0?null:x;});});S.tc={d:dd,ans:ans,done:true,secs:v.secs||0,t0:0,saved:{}};S.tab='verbal';render();window.scrollTo(0,0);}
+function tcReview(v){var dd=S.drills.filter(function(x){return x.id===v.did;})[0];if(!dd){toast('That drill is not loaded.');return;}var ans={};Object.keys(v.answers||{}).forEach(function(k){ans[k]=v.answers[k].map(function(x){return x<0?null:x;});});S.tc={d:dd,ans:ans,done:true,secs:v.secs||0,t0:0,saved:{},part:v.part||null,idx:qRange(dd.questions.length,v.part)};S.tab='verbal';render();window.scrollTo(0,0);}
 function renderTC(){
   var box=$('#tcBody');if(!box)return;box.textContent='';
   if(!S.drills.length){box.append(el('div',{class:'card muted',text:'Loading TC/SC drills...'}));return;}
@@ -805,7 +815,7 @@ function renderTC(){
       el('p',{class:'muted small',style:'margin:0',text:'Ten questions a day in GRE format: one-, two- and three-blank text completions and sentence equivalence. Every blank must be right to score, as on the real test.'}));
     if(dl.length)c.append(el('p',{class:'small',style:'margin:0',text:'Done today: '+dl.map(function(v){return v.type+' ('+v.correct+'/'+v.total+')';}).join(', ')}));
     if(nx){c.append(el('div',{class:'item'},el('span',{class:'muted small',text:'Drill '+nx.day+' · '+nx.questions.length+' questions'}),el('span',{class:'title',text:nx.title})),
-      el('div',null,el('button',{class:'btn',type:'button',onclick:function(){tcStart(nx);}},dl.length?'Do another drill':'Start today’s drill')));}
+      (tcParts(nx.id).a?el('p',{class:'muted small',style:'margin:0',text:'First 5 questions done on a quick day.'}):null),drillButtons(nx,tcParts(nx.id),tcStart,dl.length));}
     else c.append(el('p',{class:'muted',style:'margin:0',text:'You have finished every drill in this set. Ask Claude to add the next batch.'}));
     var past=tcLogs().slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;}).slice(0,8);
     if(past.length){var pl=el('div',{class:'list'},el('h3',{text:'Past drills'}));past.forEach(function(v){pl.append(el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('span',{class:'small',text:nice(v.date)+' · '+v.type+' · '+v.correct+'/'+v.total}),el('button',{class:'btn small ghost',type:'button',onclick:function(){tcReview(v);}},'Review')));});c.append(pl);}
@@ -813,6 +823,7 @@ function renderTC(){
   }
   var d=r.d,qs=el('div',{class:'list'});
   d.questions.forEach(function(q,qi){
+    if(r.idx.indexOf(qi)<0)return;
     var a=r.ans[qi]||[],ok=r.done&&tcIsRight(q,a),card=el('div',{class:'item'});
     card.append(el('div',{class:'head'},el('span',{class:'muted small',text:'Question '+(qi+1)+' of '+d.questions.length+' · '+q.type}),r.done?el('span',{class:'chip '+(ok?'good':'bad'),text:ok?'Correct':'Incorrect'}):null));
     if(q.kind==='se')card.append(el('p',{class:'muted small',style:'margin:0',text:'Select the two answers that complete the sentence and give it the same meaning.'}));
@@ -852,14 +863,14 @@ function renderTC(){
   });
   var foot;
   if(!r.done){
-    var answered=d.questions.filter(function(q,i){var a=r.ans[i]||[];return q.kind==='se'?a.length===2:q.blanks.every(function(b,bi){return a[bi]!=null;});}).length;
-    foot=el('div',{class:'row',style:'align-items:center'},el('button',{class:'btn',type:'button',onclick:tcSubmit},'Submit drill'),el('span',{class:'muted small',text:answered+' of '+d.questions.length+' answered'}),el('button',{class:'btn ghost small',type:'button',onclick:function(){S.tc=null;renderTC();}},'Leave'));
+    var answered=d.questions.filter(function(q,i){if(r.idx.indexOf(i)<0)return false;var a=r.ans[i]||[];return q.kind==='se'?a.length===2:q.blanks.every(function(b,bi){return a[bi]!=null;});}).length;
+    foot=el('div',{class:'row',style:'align-items:center'},el('button',{class:'btn',type:'button',onclick:tcSubmit},'Submit drill'),el('span',{class:'muted small',text:answered+' of '+r.idx.length+' answered'}),el('button',{class:'btn ghost small',type:'button',onclick:function(){S.tc=null;renderTC();}},'Leave'));
   }else{
-    var nc=d.questions.filter(function(q,i){return tcIsRight(q,r.ans[i]);}).length,seen={},words=[];
+    var nc=d.questions.filter(function(q,i){return r.idx.indexOf(i)>=0&&tcIsRight(q,r.ans[i]);}).length,seen={},words=[];
     d.questions.forEach(function(q){q.blanks.forEach(function(o){o.forEach(function(w){var b=S.bank.get(String(w).toLowerCase());if(b&&!seen[b.w]){seen[b.w]=1;words.push(b);}});});});
     var chips=el('div',{class:'chips'});
     words.forEach(function(b){var inW=S.words.some(function(w){return (w.word||'').toLowerCase()===b.w;});chips.append(el('button',{type:'button','aria-pressed':inW?'true':'false',title:b.m||'',onclick:function(){addWord(b.w,b.m||'','','',b.src||'').then(function(ok2){if(ok2)toast(b.w+' added to your weak bucket');});}},b.w+(inW?' ✓':' +')));});
-    foot=el('div',{class:'list'},el('div',{class:'row',style:'align-items:baseline'},el('span',{class:'big',text:nc+'/'+d.questions.length}),el('span',{class:'muted small',text:r.secs?('Time: '+fmtTime(r.secs)):''})),
+    foot=el('div',{class:'list'},el('div',{class:'row',style:'align-items:baseline'},el('span',{class:'big',text:nc+'/'+r.idx.length}),el('span',{class:'muted small',text:r.secs?('Time: '+fmtTime(r.secs)):''})),
       words.length?el('div',{class:'list'},el('h3',{text:'Words in this drill'}),el('p',{class:'muted small',style:'margin:0',text:'Tap any word you did not know to add it to your weak bucket.'}),chips):null,
       el('div',null,el('button',{class:'btn',type:'button',onclick:function(){S.tc=null;renderTC();window.scrollTo(0,0);}},'Done')));
   }
