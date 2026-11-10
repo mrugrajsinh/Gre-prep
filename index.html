@@ -88,6 +88,25 @@ section[hidden]{display:none}
 .flashcard .h{color:var(--muted);overflow-wrap:anywhere}
 .btn.big{flex:1;padding:14px 10px;font-size:16px}
 input[type=range]{padding:0;border:0;background:transparent}
+.passage{font-size:16px;line-height:1.75;max-width:68ch}
+.passage p{margin:0 0 12px}
+.sent.tap{cursor:pointer;border-radius:4px}
+.sent.tap:hover{background:var(--accent-soft)}
+.sent.sel{background:var(--warn-bg)}
+.sent.ok{background:var(--good-bg)}
+.sent.no{background:var(--bad-bg)}
+.qprompt{font-weight:600;margin:0}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opt{display:flex;gap:10px;align-items:flex-start;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:10px 12px;font:400 15px var(--font-body);cursor:pointer;width:100%}
+.opt .letter{flex:0 0 24px;height:24px;border-radius:50%;border:1.5px solid var(--muted);display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--muted)}
+.opt.sq .letter{border-radius:5px}
+.opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+.opt.sel .letter{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.opt.ok{border-color:var(--good);background:var(--good-bg)}
+.opt.no{border-color:var(--bad);background:var(--bad-bg)}
+.opt:disabled{opacity:1;cursor:default;color:var(--fg)}
+.why{font-size:13px;padding:0 4px 4px 46px;color:var(--muted)}
+.why.ok{color:var(--good)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @media (max-width:480px){.barrow{grid-template-columns:90px 1fr 30px}}
 body{margin:0}img{max-width:100%}[hidden]{display:none!important}
@@ -146,8 +165,10 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
   </section>
 
   <section id="s-articles" hidden class="wrap" style="gap:14px">
-    <form id="aForm" class="card">
-      <h2>Log an article review</h2>
+    <div id="rcBody" class="wrap" style="gap:14px"></div>
+    <details class="card">
+      <summary>Log an article you read on your own</summary>
+    <form id="aForm" class="wrap" style="gap:12px">
       <div class="row">
         <label>Date<input id="aDate" type="date" required></label>
         <label>Rating (out of 10)<input id="aScore" type="number" min="0" max="10" step="0.5" required></label>
@@ -159,6 +180,7 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
       <label>Feedback and what to fix<textarea id="aFb"></textarea></label>
       <div><button class="btn" type="submit">Save review</button></div>
     </form>
+    </details>
     <div id="aStats" class="card"></div>
     <div id="aList" class="list"></div>
   </section>
@@ -273,8 +295,8 @@ var REASON_TIPS={
  'Careless slip':'Slow down on the final check and re-read the question stem.'
 };
 var INT=[3,3,3];
-var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Article: 1 reviewed and rated'],['t','TC/SC: 2 to 3 sets done']];
-var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',deck:'g',size:50,start:null,shuffle:false}};
+var DAILY=[['v','Vocab: 50 revision words and 10 to 15 new'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Reading: 1 passage with questions'],['t','TC/SC: 2 to 3 sets done']];
+var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',deck:'g',size:50,start:null,shuffle:false},passages:[],rc:null};
 function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
 function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
 
@@ -419,6 +441,11 @@ function renderToday(){
   }
   body.append(el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('h2',{text:'Today’s plan'}),el('span',{class:'chip '+(done===4?'good':''),text:done+' of 4'})),list,week));
 
+  var nxp=rcNextPassage();
+  if(S.passages.length){var dlg=rcLogs().filter(function(a){return a.date===t;});
+    body.append(el('div',{class:'card'},el('h2',{text:'Daily reading'}),
+      dlg.length?el('p',{style:'margin:0',text:'Done today: '+dlg[0].title+' \u00b7 '+dlg[0].correct+'/'+dlg[0].total}):(nxp?el('p',{style:'margin:0',text:'Next: Passage '+nxp.day+' \u00b7 '+nxp.title}):null),
+      nxp?el('div',null,el('button',{class:dlg.length?'btn ghost':'btn',type:'button',onclick:function(){rcStart(nxp);}},dlg.length?'Do another passage':'Start passage')):null));}
   var rows=qAnalysis().filter(function(r){return r.avg==null||r.avg<80||r.misses>=2;}).slice(0,3);
   var fc=el('div',{class:'card'},el('h2',{text:'Quant topics to fix first'}));
   if(!rows.length)fc.append(el('p',{class:'muted',style:'margin:0',text:'Log quiz scores and missed questions in the Quant tab and the weakest topics will appear here.'}));
@@ -533,6 +560,7 @@ async function addWord(word,meaning,syn,own,src){
 
 /* articles */
 function renderArticles(){
+  renderRC();
   var items=S.articles.slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;});
   var st=$('#aStats');st.textContent='';
   st.append(el('h2',{text:'Ratings'}));
@@ -542,10 +570,13 @@ function renderArticles(){
     st.append(el('div',{class:'stat'},el('div',null,el('div',{class:'big',text:avg.toFixed(1)}),el('div',{class:'muted small',text:'average of last '+last.length})),el('div',null,el('div',{class:'big',text:items.length}),el('div',{class:'muted small',text:'articles reviewed'}))));
     last.slice().reverse().forEach(function(x){st.append(bar(nice(x.date),+x.score||0,10,pctClass((+x.score||0)*10),String(x.score)));});
   }
+  var bt={};rcLogs().forEach(function(a){var b=a.byType||{};Object.keys(b).forEach(function(k){var v=bt[k]||[0,0];bt[k]=[v[0]+(b[k][0]||0),v[1]+(b[k][1]||0)];});});
+  var ks=Object.keys(bt).sort(function(x,y){return bt[x][0]/bt[x][1]-bt[y][0]/bt[y][1];});
+  if(ks.length){st.append(el('h3',{text:'Accuracy by question type, weakest first'}));ks.forEach(function(k){var pc=Math.round(bt[k][0]/bt[k][1]*100);st.append(bar(k+' ('+bt[k][0]+'/'+bt[k][1]+')',pc,100,pctClass(pc),pc+'%'));});if(RC_TIPS[ks[0]])st.append(el('div',{class:'tip',text:ks[0]+': '+RC_TIPS[ks[0]]}));}
   var l=$('#aList');l.textContent='';
   items.forEach(function(x){
     l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:x.title}),el('span',{class:'chip '+pctClass((+x.score||0)*10),text:x.score+'/10'})),
-      el('span',{class:'muted small',text:nice(x.date)+(x.source?' · '+x.source:'')}),x.feedback?el('p',{class:'small',text:x.feedback}):null,el('div',null,delBtn('articles',x.id))));
+      el('span',{class:'muted small',text:nice(x.date)+(x.source?' · '+x.source:'')}),x.feedback?el('p',{class:'small',text:x.feedback}):null,el('div',{class:'row'},x.kind==='rc'?el('button',{class:'btn small ghost',type:'button',onclick:function(){rcReview(x);}},'Review answers'):null,delBtn('articles',x.id))));
   });
 }
 
@@ -596,6 +627,142 @@ function renderQuant(){
     }
   });
 }
+
+/* ---------- reading practice ---------- */
+var RC_TIPS={
+ 'Main idea':'Before reading the options, say the point of the whole passage in one sentence. The right answer covers every paragraph, not just one.',
+ 'Primary purpose':'Focus on the verb (describe, argue, explain, challenge). Match what the author is doing, not just the topic.',
+ 'Detail':'Find the exact line first. The right answer restates it; wrong answers twist a word or go beyond it.',
+ 'Inference':'The right answer must follow from the passage with no extra assumption. Cut anything stronger than the text.',
+ 'Function':'Ask why the author put this sentence or example here. Read the sentences just before and after it.',
+ "Author's attitude":'Look for qualifiers such as yet, still, or surely exaggerated. GRE authors are usually moderate, rarely extreme.',
+ 'Application':'Name the principle first, then pick the option with the same structure, not the same topic.',
+ 'Select in passage':'Pick out the key phrase in the prompt and test each candidate sentence against it word for word.',
+ 'Weaken':'Find the gap between evidence and conclusion. The best answer attacks that gap, often with another explanation.',
+ 'Strengthen':'The best answer closes the gap between evidence and conclusion or rules out another explanation.',
+ 'Assumption':'Negate each option. If the argument falls apart when an option is negated, that option is the assumption.',
+ 'Paradox':'The right answer lets both surprising facts be true at the same time.',
+ 'Evaluate':'Choose the question whose answer would push the conclusion one way or the other.',
+ 'Boldface':'Label each sentence first: opposing view, evidence, or conclusion. Then match the labels to the options.'
+};
+function fmtTime(s){var m=Math.floor(s/60),r=s%60;return m+':'+pad(r);}
+function rcLogs(){return S.articles.filter(function(a){return a.kind==='rc';});}
+function rcDoneMap(){var d={};rcLogs().forEach(function(a){if(a.pid)d[a.pid]=a;});return d;}
+function rcNextPassage(){var d=rcDoneMap();for(var i=0;i<S.passages.length;i++){if(!d[S.passages[i].id])return S.passages[i];}return null;}
+function rcSentences(p){var out=[];p.paras.forEach(function(par){par.forEach(function(s){out.push(s);});});return out;}
+function rcIsRight(q,a){a=(a||[]).slice().sort();var b=q.answer.slice().sort();return a.length===b.length&&a.every(function(x,i){return x===b[i];});}
+function rcText(t){var sp=el('span');String(t).split('**').forEach(function(part,i){sp.append(i%2?el('strong',{text:part}):document.createTextNode(part));});return sp;}
+function rcStart(p){S.rc={p:p,ans:{},done:false,t0:Date.now(),secs:0};S.tab='articles';try{location.hash='articles';}catch(e){}render();window.scrollTo(0,0);}
+function rcReview(x){var pp=S.passages.filter(function(q){return q.id===x.pid;})[0];if(!pp){toast('That passage is not loaded.');return;}S.rc={p:pp,ans:x.answers||{},done:true,secs:x.secs||0,t0:0};renderRC();window.scrollTo(0,0);}
+function rcVocab(p){
+  var text=rcSentences(p).join(' ').replace(/\*\*/g,'').toLowerCase();
+  var toks=text.match(/[a-z]+(?:-[a-z]+)*/g)||[],seen={},out=[];
+  toks.forEach(function(t){
+    var c=[t,t.replace(/s$/,''),t.replace(/es$/,''),t.replace(/ed$/,''),t.replace(/d$/,''),t.replace(/ing$/,''),t.replace(/ing$/,'e'),t.replace(/ly$/,''),t.replace(/ies$/,'y'),t.replace(/ied$/,'y')];
+    for(var i=0;i<c.length;i++){var b=S.bank.get(c[i]);if(b&&!seen[b.w]&&(b.src==='Gregmat'||b.w.length>=8)){seen[b.w]=1;out.push(b);break;}}
+  });
+  if(!out.length)return null;
+  var chips=el('div',{class:'chips'});
+  out.slice(0,16).forEach(function(b){
+    var inW=S.words.some(function(w){return (w.word||'').toLowerCase()===b.w;});
+    chips.append(el('button',{type:'button','aria-pressed':inW?'true':'false',title:b.m||'',onclick:function(){addWord(b.w,b.m||'','','',b.src||'').then(function(ok){if(ok)toast(b.w+' added to your weak bucket');});}},b.w+(inW?' ✓':' +')));
+  });
+  return el('div',{class:'list'},el('h3',{text:'GRE words in this passage'}),el('p',{class:'muted small',style:'margin:0',text:'Tap any word you did not know to add it to your weak bucket.'}),chips);
+}
+function rcSubmit(){
+  var r=S.rc;if(!r||r.done)return;var p=r.p;
+  r.secs=Math.round((Date.now()-r.t0)/1000);r.done=true;
+  var byType={},nc=0,missed=[];
+  p.questions.forEach(function(q,i){var ok=rcIsRight(q,r.ans[i]);if(ok)nc++;else missed.push(q.type);var t=byType[q.type]||[0,0];byType[q.type]=[t[0]+(ok?1:0),t[1]+1];});
+  var answers={};Object.keys(r.ans).forEach(function(k){answers[k]=r.ans[k];});
+  var doc={kind:'rc',pid:p.id,day:p.day,date:today(),title:p.title,source:'GRE practice · '+p.level+' · '+p.topic,score:Math.round(nc/p.questions.length*20)/2,correct:nc,total:p.questions.length,secs:r.secs,answers:answers,byType:byType,feedback:missed.length?'Missed: '+missed.join(', '):'All correct'};
+  renderRC();window.scrollTo(0,0);
+  save('articles',null,doc).then(function(ok){
+    if(!ok)return;toast('Score saved: '+nc+'/'+p.questions.length);
+    var t=today(),cur=Object.assign({},S.daily[t]||{});if(!cur.a){cur.a=true;cur.date=t;S.daily[t]=cur;save('daily',t,cur);}
+  });
+}
+function renderRC(){
+  var box=$('#rcBody');if(!box)return;box.textContent='';
+  if(!S.passages.length){box.append(el('div',{class:'card muted',text:'Loading reading practice...'}));return;}
+  var r=S.rc;
+  if(!r){
+    var nx=rcNextPassage(),done=Object.keys(rcDoneMap()).length,t=today();
+    var dl=rcLogs().filter(function(a){return a.date===t;});
+    var c=el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('h2',{text:'Daily reading'}),el('span',{class:'chip',text:done+' of '+S.passages.length+' done'})),
+      el('p',{class:'muted small',style:'margin:0',text:'One GRE-style passage a day. Read it, answer every question, then submit. Your score is saved here automatically, with an explanation for every option.'}));
+    if(dl.length)c.append(el('p',{class:'small',style:'margin:0',text:'Done today: '+dl.map(function(a){return a.title+' ('+a.correct+'/'+a.total+')';}).join(', ')}));
+    if(nx){
+      c.append(el('div',{class:'item'},el('span',{class:'muted small',text:'Passage '+nx.day+' · '+nx.level+' · '+nx.topic}),el('span',{class:'title',text:nx.title}),el('span',{class:'muted small',text:(nx.level==='Argument'?'Short argument':nx.words+' words')+' · '+nx.questions.length+' questions'})),
+        el('div',null,el('button',{class:'btn',type:'button',onclick:function(){rcStart(nx);}},dl.length?'Do another passage':'Start today’s passage')));
+    }else c.append(el('p',{class:'muted',style:'margin:0',text:'You have finished every passage in this set. Ask Claude to add the next batch.'}));
+    box.append(c);return;
+  }
+  var p=r.p,sents=rcSentences(p),selQ=-1,L='ABCDE';
+  p.questions.forEach(function(q,i){if(q.kind==='select')selQ=i;});
+  var head=el('div',{class:'row',style:'justify-content:space-between;align-items:center'},
+    el('span',{class:'muted small',text:'Passage '+p.day+' · '+p.level+' · '+p.topic}),
+    r.done?el('span',{class:'chip',text:'Review'}):el('span',{class:'chip',id:'rcTimer',text:fmtTime(Math.floor((Date.now()-r.t0)/1000))}));
+  var art=el('div',{class:'passage'}),gi=0;
+  p.paras.forEach(function(par){
+    var pe=el('p');
+    par.forEach(function(s){(function(idx){
+      var sp=el('span',{class:'sent'},rcText(s));
+      if(selQ>=0){
+        var chosen=(r.ans[selQ]||[])[0]===idx,right=p.questions[selQ].answer[0]===idx;
+        if(r.done){if(right)sp.classList.add('ok');else if(chosen)sp.classList.add('no');}
+        else{sp.classList.add('tap');if(chosen)sp.classList.add('sel');sp.addEventListener('click',function(){r.ans[selQ]=[idx];renderRC();});}
+      }
+      pe.append(sp,' ');
+    })(gi++);});
+    art.append(pe);
+  });
+  var qs=el('div',{class:'list'});
+  p.questions.forEach(function(q,qi){
+    var a=r.ans[qi]||[],ok=r.done&&rcIsRight(q,a);
+    var card=el('div',{class:'item'});
+    card.append(el('div',{class:'head'},el('span',{class:'muted small',text:'Question '+(qi+1)+' of '+p.questions.length+(r.done?' · '+q.type:'')}),r.done?el('span',{class:'chip '+(ok?'good':'bad'),text:ok?'Correct':'Incorrect'}):null));
+    if(q.kind==='multi')card.append(el('p',{class:'muted small',style:'margin:0',text:'Consider each choice separately and select all that apply.'}));
+    card.append(el('p',{class:'qprompt'},rcText(q.prompt)));
+    if(q.kind==='select'){
+      var s=a.length?sents[a[0]]:'';
+      card.append(el('p',{class:'small'+(s?'':' muted'),style:'margin:0',text:s?'Your choice: “'+s.replace(/\*\*/g,'')+'”':'Tap a sentence in the passage above.'}));
+      if(r.done&&!ok)card.append(el('div',{class:'why ok',style:'padding-left:0',text:'Correct sentence: “'+sents[q.answer[0]].replace(/\*\*/g,'')+'”'}));
+    }else{
+      var opts=el('div',{class:'opts'});
+      q.options.forEach(function(o,oi){
+        var picked=a.indexOf(oi)>=0,right=q.answer.indexOf(oi)>=0;
+        var cls='opt'+(picked?' sel':'')+(q.kind==='multi'?' sq':'');
+        if(r.done)cls+=right?' ok':(picked?' no':'');
+        opts.append(el('button',{class:cls,type:'button',disabled:r.done?true:null,onclick:function(){
+          var cur=(r.ans[qi]||[]).slice();
+          if(q.kind==='multi'){var k=cur.indexOf(oi);if(k>=0)cur.splice(k,1);else cur.push(oi);}else cur=[oi];
+          r.ans[qi]=cur;renderRC();}},el('span',{class:'letter',text:L[oi]}),el('span',{class:'otext'},rcText(o.t))));
+        if(r.done&&o.why)opts.append(el('div',{class:'why '+(right?'ok':''),text:(right?'Correct: ':'Wrong: ')+o.why}));
+      });
+      card.append(opts);
+    }
+    if(r.done&&q.explain)card.append(el('div',{class:'tip',text:q.explain}));
+    if(r.done&&!ok&&RC_TIPS[q.type])card.append(el('p',{class:'muted small',style:'margin:0',text:'Strategy for '+q.type+' questions: '+RC_TIPS[q.type]}));
+    qs.append(card);
+  });
+  var foot;
+  if(!r.done){
+    var answered=p.questions.filter(function(q,i){return (r.ans[i]||[]).length;}).length;
+    foot=el('div',{class:'row',style:'align-items:center'},
+      el('button',{class:'btn',type:'button',onclick:rcSubmit},'Submit answers'),
+      el('span',{class:'muted small',text:answered+' of '+p.questions.length+' answered'}),
+      el('button',{class:'btn ghost small',type:'button',onclick:function(){S.rc=null;renderRC();}},'Leave'));
+  }else{
+    var nc=p.questions.filter(function(q,i){return rcIsRight(q,r.ans[i]);}).length;
+    foot=el('div',{class:'list'},
+      el('div',{class:'row',style:'align-items:baseline'},el('span',{class:'big',text:nc+'/'+p.questions.length}),el('span',{class:'muted small',text:r.secs?('Time: '+fmtTime(r.secs)):''})),
+      rcVocab(p),
+      el('div',null,el('button',{class:'btn',type:'button',onclick:function(){S.rc=null;renderRC();window.scrollTo(0,0);}},'Done')));
+  }
+  box.append(el('div',{class:'card'},head,el('h2',{text:p.title}),art),el('div',{class:'card'},el('h2',{text:r.done?'Results':'Questions'}),qs,foot));
+}
+function loadPassages(){fetch('passages.json').then(function(r){return r.ok?r.json():[];}).then(function(list){S.passages=Array.isArray(list)?list.sort(function(a,b){return a.day-b.day;}):[];schedule();}).catch(function(){});}
 
 /* ---------- flashcards ---------- */
 function deckWords(d){var out=[];S.fileBank.forEach(function(x){if(d==='a'||x.src==='Gregmat')out.push(x);});return out;}
@@ -776,6 +943,8 @@ function init(){
   render();
   setTimeout(function(){S.timedOut=true;schedule();},10000);
   loadBankFile();
+  loadPassages();
+  setInterval(function(){if(S.rc&&!S.rc.done){var tm=document.getElementById('rcTimer');if(tm)tm.textContent=fmtTime(Math.floor((Date.now()-S.rc.t0)/1000));}},1000);
   connect();
 }
 var started=false;
