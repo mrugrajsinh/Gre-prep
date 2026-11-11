@@ -1217,7 +1217,7 @@ function renderCards(){
     el('div',{class:'row',style:'justify-content:space-between'},
       el('button',{class:'btn small ghost',type:'button',disabled:i===0?true:null,onclick:function(){cdGo(i-1);}},'← Back'),
       el('button',{class:'btn small ghost',type:'button',onclick:function(){cdGo(i+1);}},i===c.list.length-1?'Finish →':'Next →')),
-    slider,hookBox));
+    slider,c.flip?hookBox:el('p',{class:'muted small',style:'margin:0',text:'Your memory hook shows here after you flip the card.'})));
 }
 
 /* ---------- wiring ---------- */
