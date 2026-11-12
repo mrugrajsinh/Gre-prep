@@ -328,7 +328,7 @@ var REASON_TIPS={
  'Careless slip':'Slow down on the final check and re-read the question stem.'
 };
 var INT=[3,3,3];
-var DAILY=[['v','Vocab: 80 cards (due weak words first)'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Reading: 1 passage with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
+var DAILY=[['v','Vocab: 80 cards (due weak words first)'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Reading: 2 to 3 passages with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
 var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',size:80,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null,qdrills:[],qd:null,hooks:{}};
 function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
 function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
@@ -480,8 +480,8 @@ function renderToday(){
   var nxp=rcNextPassage();
   if(S.passages.length){var dlg=rcLogs().filter(function(a){return a.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily reading'}),
-      dlg.length?el('p',{style:'margin:0',text:'Done today: '+dlg[0].title+' \u00b7 '+dlg[0].correct+'/'+dlg[0].total}):(nxp?el('p',{style:'margin:0',text:'Next: Passage '+nxp.day+' \u00b7 '+nxp.title}):null),
-      nxp?el('div',null,el('button',{class:dlg.length?'btn ghost':'btn',type:'button',onclick:function(){rcStart(nxp);}},dlg.length?'Do another passage':'Start passage')):null));}
+      dlg.length?el('p',{style:'margin:0',text:'Done today ('+dlg.length+' of 2\u20133): '+dlg.map(function(a){return a.title+' \u00b7 '+a.correct+'/'+a.total;}).join(', ')}):(nxp?el('p',{style:'margin:0',text:'Next: Passage '+nxp.day+' \u00b7 '+nxp.title}):null),
+      nxp?el('div',null,el('button',{class:dlg.length>=RC_TARGET?'btn ghost':'btn',type:'button',onclick:function(){rcStart(nxp);}},dlg.length?'Do another passage':'Start passage')):null));}
   var nxd=tcNext();
   if(S.drills.length){var dld=tcLogs().filter(function(v){return v.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily TC/SC drill'}),
@@ -1065,6 +1065,7 @@ var RC_TIPS={
  'Boldface':'Label each sentence first: opposing view, evidence, or conclusion. Then match the labels to the options.'
 };
 function fmtTime(s){var m=Math.floor(s/60),r=s%60;return m+':'+pad(r);}
+var RC_TARGET=2;
 function rcLogs(){return S.articles.filter(function(a){return a.kind==='rc';});}
 function rcDoneMap(){var d={};rcLogs().forEach(function(a){if(a.pid)d[a.pid]=a;});return d;}
 function rcNextPassage(){var d=rcDoneMap();for(var i=0;i<S.passages.length;i++){if(!d[S.passages[i].id])return S.passages[i];}return null;}
@@ -1098,7 +1099,7 @@ function rcSubmit(){
   renderRC();window.scrollTo(0,0);
   save('articles',null,doc).then(function(ok){
     if(!ok)return;toast('Score saved: '+nc+'/'+p.questions.length);
-    var t=today(),cur=Object.assign({},S.daily[t]||{});if(!cur.a){cur.a=true;cur.date=t;S.daily[t]=cur;save('daily',t,cur);}
+    var t=today(),nT=rcLogs().filter(function(a){return a.date===t&&a.pid!==p.id;}).length+1;if(nT<RC_TARGET){toast('Passage '+nT+' of '+RC_TARGET+' today done');return;}var cur=Object.assign({},S.daily[t]||{});if(!cur.a){cur.a=true;cur.date=t;S.daily[t]=cur;save('daily',t,cur);}
   });
 }
 function renderRC(){
@@ -1109,8 +1110,8 @@ function renderRC(){
     var nx=rcNextPassage(),done=Object.keys(rcDoneMap()).length,t=today();
     var dl=rcLogs().filter(function(a){return a.date===t;});
     var c=el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('h2',{text:'Daily reading'}),el('span',{class:'chip',text:done+' of '+S.passages.length+' done'})),
-      el('p',{class:'muted small',style:'margin:0',text:'One GRE-style passage a day. Read it, answer every question, then submit. Your score is saved here automatically, with an explanation for every option.'}));
-    if(dl.length)c.append(el('p',{class:'small',style:'margin:0',text:'Done today: '+dl.map(function(a){return a.title+' ('+a.correct+'/'+a.total+')';}).join(', ')}));
+      el('p',{class:'muted small',style:'margin:0',text:'Two to three GRE-style passages a day. Read it, answer every question, then submit. Your score is saved here automatically, with an explanation for every option.'}));
+    if(dl.length)c.append(el('p',{class:'small',style:'margin:0',text:'Done today ('+dl.length+' of 2–3): '+dl.map(function(a){return a.title+' ('+a.correct+'/'+a.total+')';}).join(', ')}));
     if(nx){
       c.append(el('div',{class:'item'},el('span',{class:'muted small',text:'Passage '+nx.day+' · '+nx.level+' · '+nx.topic}),el('span',{class:'title',text:nx.title}),el('span',{class:'muted small',text:(nx.level==='Argument'?'Short argument':nx.words+' words')+' · '+nx.questions.length+' questions'})),
         el('div',null,el('button',{class:'btn',type:'button',onclick:function(){rcStart(nx);}},dl.length?'Do another passage':'Start today’s passage')));
