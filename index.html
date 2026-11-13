@@ -462,7 +462,7 @@ function renderToday(){
       el('div',null,el('div',{class:'big',text:due.length}),el('div',{class:'muted small',text:due.length===1?'word is due today':'words are due today'})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return !w.mastered;}).length}),el('div',{class:'muted small',text:'weak words in rotation'})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return w.mastered;}).length}),el('div',{class:'muted small',text:'mastered'})),el('div',null,el('div',{class:'big',text:cdSaved()}),el('div',{class:'muted small',text:'of '+S.fileBank.size+' words covered'})),el('div',null,el('div',{class:'big',text:knownList().length}),el('div',{class:'muted small',text:'known on first sight'}))),
-    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Today\u2019s 80 words'),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:startReview},due.length?'Review due words':'Nothing due'))
+    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Today\u2019s 80 words'),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:function(){cdStartWeak(dueWords());}},due.length?'Review due words':'Nothing due'))
   ));
 
   var list=el('div',null);
@@ -571,6 +571,7 @@ function renderWords(){
     return !q||(w.word||'').toLowerCase().indexOf(q)>=0||(w.meaning||'').toLowerCase().indexOf(q)>=0;
   }).sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:(a.word<b.word?-1:1));});
   var list=$('#wList');list.textContent='';
+  if(S.wf!=='mastered')list.append(el('div',{class:'card'},el('h2',{text:'Revise weak words'}),el('p',{class:'muted small',style:'margin:0',text:'Flashcards with only your weak words. Miss one and it stays weak and comes back in 3 days. Get it right 3 times in a row and it is mastered.'}),weakButtons()));
   if(!items.length){
     list.append(el('div',{class:'card muted',text:S.wf==='due'?'No words are due. Add the red words from your revision above and they will come back every 3 days until you get them right 3 times in a row.':'Nothing here yet.'}));
     return;
@@ -1192,6 +1193,19 @@ function weakDoc(w){return S.words.filter(function(x){return (x.word||'').toLowe
 function hookFor(w){var h=S.hooks[hookKey(w)];if(h&&h.own)return h.own;var ww=weakDoc(w);if(ww&&ww.own)return ww.own;var b=S.bank.get(w);return (b&&b.o)||'';}
 function knownList(){var k=S.meta.known;return (k&&Array.isArray(k.words))?k.words:[];}
 function speakWord(w){try{var u=new SpeechSynthesisUtterance(w);u.lang='en-US';window.speechSynthesis.cancel();window.speechSynthesis.speak(u);}catch(e){}}
+function wkCard(w){var k=(w.word||'').toLowerCase(),b=S.bank.get(k)||{};return {w:k,m:w.meaning||b.m||'',s:w.syn||b.s||'',o:b.o||'',g:b.g||w.grp||'',ai:b.ai,src:w.src||b.src||'',rev:w.id};}
+function cdStartWeak(src){
+  var list=shuffle(src).map(wkCard);
+  if(!list.length){toast('No weak words to revise right now.');return;}
+  var sz=(S.cd&&S.cd.size)||80;
+  S.cd={stage:'run',weak:true,size:sz,shuffle:false,list:list,i:0,marks:{},orig:{},added:{},draft:{},flip:false,startIdx:cdSaved(),fresh:0,nrev:list.length,total:deckWords().length,start:null};
+  go('cards');
+}
+function weakAll(){return S.words.filter(function(w){return !w.mastered;});}
+function weakButtons(){var d=dueWords().length,a=weakAll().length;
+  return el('div',{class:'row'},
+    el('button',{class:'btn',type:'button',disabled:d===0?true:null,onclick:function(){cdStartWeak(dueWords());}},d?'Revise '+d+' due weak word'+(d===1?'':'s')+' as cards':'No weak words due'),
+    el('button',{class:'btn ghost',type:'button',disabled:a===0?true:null,onclick:function(){cdStartWeak(weakAll());}},'All '+a+' weak words as cards'));}
 function cdStart(){
   var c=S.cd,all=deckWords(),n=Math.max(1,Math.min(200,c.size||80));
   var due=dueWords().slice(0,n).map(function(w){var k=(w.word||'').toLowerCase(),b=S.bank.get(k)||{};return {w:k,m:w.meaning||b.m||'',s:w.syn||b.s||'',o:b.o||'',g:b.g||w.grp||'',ai:b.ai,src:w.src||b.src||'',rev:w.id};});
@@ -1260,6 +1274,17 @@ function renderCards(){
       el('div',{class:'row'},el('label',null,'Start new words at',st),el('label',null,'Words per day',sz)),
       el('label',{style:'flex-direction:row;align-items:center;gap:8px'},sh,'Shuffle the new words'),
       el('div',null,el('button',{class:'btn',type:'button',onclick:function(){cdStart();renderCards();}},'Start'))));
+    box.append(el('div',{class:'card'},el('h2',{text:'Weak words only'}),el('p',{class:'muted small',style:'margin:0',text:'Revise just your weak words as cards. Misses stay weak and come back in 3 days.'}),weakButtons()));
+    return;
+  }
+  if(c.stage==='done'&&c.weak){
+    var okN=0,miss=[];Object.keys(c.marks).forEach(function(k){var x=c.list[+k];if(c.marks[k]==='k')okN++;else miss.push(x);});
+    var mc=el('div',{class:'chips'});miss.forEach(function(x){mc.append(el('span',{class:'chip bad',text:x.w}));});
+    box.append(el('div',{class:'card'},el('h2',{text:'Weak-word revision finished'}),
+      el('p',{style:'margin:0',text:okN+' right, '+miss.length+' missed. Missed words stay weak and come back in 3 days.'}),miss.length?mc:null,
+      el('div',{class:'row'},
+        miss.length?el('button',{class:'btn',type:'button',onclick:function(){var ids={};miss.forEach(function(x){ids[x.rev]=1;});cdStartWeak(S.words.filter(function(w){return ids[w.id];}));}},'Go again on the '+miss.length+' missed'):null,
+        el('button',{class:'btn ghost',type:'button',onclick:function(){S.cd={stage:'setup',size:c.size,start:null,shuffle:false};renderCards();}},'Back to Cards'))));
     return;
   }
   if(c.stage==='done'){
