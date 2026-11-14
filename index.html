@@ -256,6 +256,7 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
         <label>Date<input id="qzDate" type="date" required></label>
         <label>Module and part<input id="qzLabel" placeholder="M6 · 3"></label>
       </div>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input id="qzEom" type="checkbox" style="width:auto">End-of-module quiz (whole module, mixed topics)</label>
       <label>Topic<select id="qzTopic"></select></label>
       <div class="row">
         <label>Correct<input id="qzC" type="number" min="0"></label>
@@ -328,7 +329,7 @@ var REASON_TIPS={
  'Careless slip':'Slow down on the final check and re-read the question stem.'
 };
 var INT=[3,3,3];
-var DAILY=[['v','Vocab: 80 cards (due weak words first)'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['a','Reading: 2 to 3 passages with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
+var DAILY=[['v','Vocab: 80 cards (due weak words first)'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['m','Quant: end-of-module quiz on a finished module'],['a','Reading: 2 to 3 passages with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
 var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',size:80,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null,qdrills:[],qd:null,hooks:{}};
 function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
 function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
@@ -383,10 +384,39 @@ function bar(label,val,max,cls,shown){
 
 /* ---------- analysis ---------- */
 function dueWords(){var t=today();return S.words.filter(function(w){return !w.mastered&&(w.due||t)<=t;});}
+/* end-of-module quiz rotation */
+function eomDoneUpTo(){var m=S.meta.quantmods||{};return parseInt(m.done,10)||0;}
+function eomLogs(){return S.quant.filter(function(d){return d.kind==='quiz'&&d.eom;});}
+function eomModOf(d){var r=/M\s*(\d+)/i.exec(d.label||'');return r?parseInt(r[1],10):null;}
+function eomStats(){var n=eomDoneUpTo(),st={};for(var i=1;i<=n;i++)st[i]={mod:i,last:null,pct:null,count:0};
+  eomLogs().forEach(function(d){var k=eomModOf(d);if(!k||!st[k])return;var s=st[k];s.count++;if(!s.last||d.date>=s.last){s.last=d.date;s.pct=d.pct;}});
+  return Object.keys(st).map(function(k){return st[k];});}
+function eomPick(){var l=eomStats();if(!l.length)return null;
+  l.sort(function(a,b){if(!a.last&&b.last)return -1;if(a.last&&!b.last)return 1;if(!a.last&&!b.last)return a.mod-b.mod;
+    var wa=(a.pct!=null&&a.pct<70)?-3:0,wb=(b.pct!=null&&b.pct<70)?-3:0;var da=daysAgo(a.last)-wa,db=daysAgo(b.last)-wb;return db-da||a.mod-b.mod;});
+  return l[0];}
+function eomCard(){
+  var t=today(),n=eomDoneUpTo(),doneT=eomLogs().filter(function(d){return d.date===t;});
+  var inp=el('input',{type:'number',min:'0',max:'30',value:String(n),style:'max-width:90px','aria-label':'Finished modules up to'});
+  var setRow=el('div',{class:'row',style:'align-items:flex-end'},el('label',{style:'flex:0 1 auto'},'Modules finished (M1 to M…)',inp),
+    el('div',null,el('button',{class:'btn small ghost',type:'button',onclick:function(){var v=Math.max(0,parseInt(inp.value,10)||0),d={done:v};S.meta.quantmods=d;save('meta','quantmods',d);toast('Saved: modules 1 to '+v+' are in rotation');render();}},'Save')));
+  var c=el('div',{class:'card'},el('h2',{text:'End-of-module quiz'}));
+  if(!n){c.append(el('p',{class:'muted small',style:'margin:0',text:'Enter the last Gregmat module you have finished. Each day one finished module is picked for its end-of-module quiz: modules never quizzed first, then the oldest, with low scores (under 70%) coming back sooner.'}),setRow);return c;}
+  if(doneT.length)c.append(el('p',{style:'margin:0',text:'Done today: '+doneT.map(function(d){return (d.label||'Module')+' · '+d.pct+'%';}).join(', ')}));
+  var p=eomPick();
+  if(p){c.append(el('p',{style:'margin:0',text:(doneT.length?'Next up: ':'Today: ')+'Module '+p.mod+' end-of-module quiz'}),
+    el('p',{class:'muted small',style:'margin:0',text:p.last?('Last done '+nice(p.last)+' · '+p.pct+'%'+(p.count>1?' · '+p.count+' attempts':'')):'Not quizzed yet'}),
+    el('div',null,el('button',{class:doneT.length?'btn ghost':'btn',type:'button',onclick:function(){go('quant');setTimeout(function(){var lb=$('#qzLabel'),cb=$('#qzEom');if(lb)lb.value='M'+p.mod;if(cb)cb.checked=true;var f=$('#qzForm');if(f)f.scrollIntoView({behavior:'smooth'});},60);}},'Log the score')));}
+  var all=eomStats().filter(function(s){return s.last;});
+  if(all.length){var ch=el('div',{class:'chips'});eomStats().forEach(function(s){ch.append(el('span',{class:'chip '+(s.pct==null?'':pctClass(s.pct)),text:'M'+s.mod+(s.pct==null?' –':' '+s.pct+'%')}));});c.append(ch);}
+  c.append(el('details',null,el('summary',{class:'small',text:'Change finished modules'}),setRow));
+  return c;
+}
 function qAnalysis(){
   var m={};
   S.quant.forEach(function(d){
     if(d.kind==='qdrill'){var bt=d.byTopic||{};Object.keys(bt).forEach(function(k){var v=bt[k],tt=m[k]||(m[k]={topic:k,pcts:[],misses:0,types:{}});if(v[1])tt.pcts.push({d:d.date||'',p:Math.round(v[0]/v[1]*100)});});return;}
+    if(d.eom)return;
     var t=m[d.topic]||(m[d.topic]={topic:d.topic,pcts:[],misses:0,types:{}});
     if(d.kind==='quiz'&&typeof d.pct==='number')t.pcts.push({d:d.date||'',p:d.pct});
     if(d.kind==='miss'){t.misses++;var k=d.errType||'Other';t.types[k]=(t.types[k]||0)+1;}
@@ -483,6 +513,7 @@ function renderToday(){
       dlg.length?el('p',{style:'margin:0',text:'Done today ('+dlg.length+' of 2\u20133): '+dlg.map(function(a){return a.title+' \u00b7 '+a.correct+'/'+a.total;}).join(', ')}):(nxp?el('p',{style:'margin:0',text:'Next: Passage '+nxp.day+' \u00b7 '+nxp.title}):null),
       nxp?el('div',null,el('button',{class:dlg.length>=RC_TARGET?'btn ghost':'btn',type:'button',onclick:function(){rcStart(nxp);}},dlg.length?'Do another passage':'Start passage')):null));}
   var nxd=tcNext();
+  body.append(eomCard());
   if(S.drills.length){var dld=tcLogs().filter(function(v){return v.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily TC/SC drill'}),
       dld.length?el('p',{style:'margin:0',text:'Done today: '+dld[0].type+' \u00b7 '+dld[0].correct+'/'+dld[0].total}):(nxd?el('p',{style:'margin:0',text:'Next: Drill '+nxd.day+' \u00b7 '+nxd.title}):null),
@@ -674,7 +705,7 @@ function renderQuant(){
   S.quant.slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;}).slice(0,40).forEach(function(d){
     if(d.kind==='qdrill'){l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:'ETS-style drill '+d.day}),el('span',{class:'chip '+pctClass(Math.round(d.correct/d.total*100)),text:d.correct+'/'+d.total})),el('span',{class:'muted small',text:nice(d.date)}),el('div',{class:'row'},el('button',{class:'btn small ghost',type:'button',onclick:function(){qdReview(d);}},'Review answers'),delBtn('quant',d.id))));return;}
     if(d.kind==='quiz'){
-      l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:'Quiz · '+d.topic+(d.label?' · '+d.label:'')}),el('span',{class:'chip '+pctClass(d.pct),text:d.pct+'%'})),
+      l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:(d.eom?'End-of-module quiz':'Quiz · '+d.topic)+(d.label?' · '+d.label:'')}),el('span',{class:'chip '+pctClass(d.pct),text:d.pct+'%'})),
         el('span',{class:'muted small',text:nice(d.date)+(d.total?' · '+d.correct+'/'+d.total:'')}),el('div',null,delBtn('quant',d.id))));
     }else{
       l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:d.topic+' · '+d.ref}),el('span',{class:'chip bad',text:d.errType})),
@@ -1414,9 +1445,12 @@ function init(){
     var c=parseInt(val('qzC'),10),t=parseInt(val('qzT'),10),p=parseFloat(val('qzP')),pct;
     if(t>0&&c>=0&&c<=t)pct=Math.round(c/t*100);else if(!isNaN(p)&&p>=0&&p<=100)pct=Math.round(p);
     if(pct==null){toast('Enter correct and total, or a score percentage.');return;}
-    var doc={kind:'quiz',date:val('qzDate'),topic:val('qzTopic'),label:val('qzLabel').trim(),pct:pct};
+    var eom=$('#qzEom').checked;
+    if(eom&&!/M\s*\d+/i.test(val('qzLabel'))){toast('Enter the module, for example M3.');return;}
+    var doc={kind:'quiz',date:val('qzDate'),topic:eom?'End-of-module':val('qzTopic'),label:val('qzLabel').trim(),pct:pct};if(eom)doc.eom=true;
     if(t>0&&c>=0&&c<=t){doc.correct=c;doc.total=t;}
-    if(await save('quant',null,doc)){toast('Quiz saved.');['qzC','qzT','qzP','qzLabel'].forEach(function(id){$('#'+id).value='';});}
+    if(await save('quant',null,doc)){toast('Quiz saved.');['qzC','qzT','qzP','qzLabel'].forEach(function(id){$('#'+id).value='';});$('#qzEom').checked=false;
+      if(eom&&doc.date===today()){var cur=Object.assign({},S.daily[doc.date]||{});if(!cur.m){cur.m=true;cur.date=doc.date;S.daily[doc.date]=cur;save('daily',doc.date,cur);}}}
   });
   var qmT=0;
   $('#qmTopic').addEventListener('change',function(){S.qmManual=true;});
