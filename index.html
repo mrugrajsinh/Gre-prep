@@ -395,6 +395,7 @@ function eomPick(){var l=eomStats();if(!l.length)return null;
   l.sort(function(a,b){if(!a.last&&b.last)return -1;if(a.last&&!b.last)return 1;if(!a.last&&!b.last)return a.mod-b.mod;
     var wa=(a.pct!=null&&a.pct<70)?-3:0,wb=(b.pct!=null&&b.pct<70)?-3:0;var da=daysAgo(a.last)-wa,db=daysAgo(b.last)-wb;return db-da||a.mod-b.mod;});
   return l[0];}
+function eomMiss(label){S.qmRefKeep='Gregmat '+label;go('quant');setTimeout(function(){var r=$('#qmRef'),d=$('#qmDate'),q=$('#qmQ'),f=$('#qmForm');if(r)r.value=S.qmRefKeep;if(d&&!d.value)d.value=today();if(f)f.scrollIntoView({behavior:'smooth'});if(q)q.focus();},80);}
 function eomQuick(defMod){
   var md=el('input',{type:'number',min:'1',max:'30',placeholder:'1',value:defMod?String(defMod):'','aria-label':'Module'});
   var pt=el('input',{type:'number',min:'1',max:'20',placeholder:'opt.','aria-label':'Part (optional)'});
@@ -412,7 +413,7 @@ function eomQuick(defMod){
     if(t>0&&c>=0&&c<=t){doc.correct=c;doc.total=t;}
     busy=true;
     save('quant',null,doc).then(function(ok){busy=false;if(!ok)return;
-      toast('Saved: '+doc.label+' · '+pct+'%');
+      toast('Saved: '+doc.label+' · '+pct+'%');S.eomLast=doc.label;
       if(m>eomDoneUpTo()){var q={done:m};S.meta.quantmods=q;save('meta','quantmods',q);}
       var cur=Object.assign({},S.daily[d]||{});if(!cur.m){cur.m=true;cur.date=d;S.daily[d]=cur;save('daily',d,cur);}
       render();});
@@ -421,7 +422,8 @@ function eomQuick(defMod){
     el('div',{class:'row'},el('label',null,'Module (M)',md),el('label',null,'Part (P)',pt),el('label',null,'Score %',pc)),
     el('p',{class:'muted small',style:'margin:0',text:'Or enter correct and total instead of the %:'}),
     el('div',{class:'row'},el('label',null,'Correct',cr),el('label',null,'Total',tt)),
-    el('div',null,el('button',{class:'btn',type:'button',onclick:go2},'Save quiz score')));
+    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:go2},'Save quiz score'),
+      el('button',{class:'btn ghost',type:'button',onclick:function(){var m=parseInt(md.value,10),p=parseInt(pt.value,10);if(!(m>0)&&!S.eomLast){toast('Enter the module number first.');return;}eomMiss(m>0?('M'+m+(p>0?' \u00b7 P'+p:'')):S.eomLast);}},'Log a wrong question')));
 }
 function eomCard(){
   var t=today(),n=eomDoneUpTo(),doneT=eomLogs().filter(function(d){return d.date===t;});
@@ -429,6 +431,7 @@ function eomCard(){
   var setRow=el('div',{class:'row',style:'align-items:flex-end'},el('label',{style:'flex:0 1 auto'},'Modules finished (M1 to M…)',inp),
     el('div',null,el('button',{class:'btn small ghost',type:'button',onclick:function(){var v=Math.max(0,parseInt(inp.value,10)||0),d={done:v};S.meta.quantmods=d;save('meta','quantmods',d);toast('Saved: modules 1 to '+v+' are in rotation');render();}},'Save')));
   var c=el('div',{class:'card'},el('h2',{text:'End-of-module quiz'}));
+  if(S.eomLast)c.append(el('div',{class:'tip'},el('span',{text:'Got any wrong in '+S.eomLast+'? Log each one so it shows up in your weak topics. '}),el('button',{class:'btn small',type:'button',onclick:function(){eomMiss(S.eomLast);}},'Log wrong questions')));
   if(!n){c.append(el('p',{class:'small',style:'margin:0',text:'Log a quiz score below, for example M1 · P1 · 71%. It counts towards your Quant score.'}),eomQuick(null),el('p',{class:'muted small',style:'margin:0',text:'Enter the last Gregmat module you have finished. Each day one finished module is picked for its end-of-module quiz: modules never quizzed first, then the oldest, with low scores (under 70%) coming back sooner.'}),setRow);return c;}
   if(doneT.length)c.append(el('p',{style:'margin:0',text:'Done today: '+doneT.map(function(d){return (d.label||'Module')+' · '+d.pct+'%';}).join(', ')}));
   var p=eomPick();
@@ -1494,7 +1497,7 @@ function init(){
     e.preventDefault();
     var dq=detectQ(val('qmQ'));
     if(await save('quant',null,{kind:'miss',date:val('qmDate'),topic:val('qmTopic'),fmt:val('qmFmt'),q:val('qmQ').trim().slice(0,2000),tags:(S.qmTags||dq.tags.map(function(x){return x.id;})),ref:val('qmRef').trim()||'Not specified',errType:val('qmType'),why:val('qmWhy').trim(),next:val('qmNext').trim()})){
-      toast('Saved. Check "What you keep getting wrong" above.');var d=val('qmDate'),t=val('qmTopic');e.target.reset();$('#qmDate').value=d;$('#qmTopic').value=t;$('#qmDetect').textContent='';S.qmTags=null;S.qmManual=false;
+      toast(S.qmRefKeep?'Saved. Add the next wrong question, or go back to Today.':'Saved. Check "What you keep getting wrong" above.');var d=val('qmDate'),t=val('qmTopic');e.target.reset();$('#qmDate').value=d;$('#qmTopic').value=t;if(S.qmRefKeep){$('#qmRef').value=S.qmRefKeep;$('#qmQ').focus();}$('#qmDetect').textContent='';S.qmTags=null;S.qmManual=false;
     }
   });
 
