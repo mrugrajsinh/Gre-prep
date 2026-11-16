@@ -384,7 +384,7 @@ function bar(label,val,max,cls,shown){
 
 /* ---------- analysis ---------- */
 function dueWords(){var t=today();return S.words.filter(function(w){return !w.mastered&&(w.due||t)<=t;});}
-var WEAK_CAP=15;
+var WEAK_CAP=30;
 function revisedToday(){var t=today();return S.words.filter(function(w){return w.last===t;}).length;}
 function todayWeak(){var left=Math.max(0,WEAK_CAP-revisedToday());return dueWords().sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:((b.misses||0)-(a.misses||0)));}).slice(0,left);}
 /* end-of-module quiz rotation */
@@ -636,7 +636,7 @@ function renderWords(){
     return !q||(w.word||'').toLowerCase().indexOf(q)>=0||(w.meaning||'').toLowerCase().indexOf(q)>=0;
   }).sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:(a.word<b.word?-1:1));});
   var list=$('#wList');list.textContent='';
-  if(S.wf!=='mastered')list.append(el('div',{class:'card'},el('h2',{text:'Revise weak words'}),el('p',{class:'muted small',style:'margin:0',text:'Up to 15 weak words a day, the longest-waiting first; the rest wait for the next day. Miss one and it stays weak and comes back in 3 days. Get it right 3 times in a row and it is mastered.'}),weakButtons()));
+  if(S.wf!=='mastered')list.append(el('div',{class:'card'},el('h2',{text:'Revise weak words'}),el('p',{class:'muted small',style:'margin:0',text:'Up to 30 weak words a day, the longest-waiting first; the rest wait for the next day. Miss one and it stays weak and comes back in 3 days. Get it right 3 times in a row and it is mastered.'}),weakButtons()));
   if(!items.length){
     list.append(el('div',{class:'card muted',text:S.wf==='due'?'No words are due. Add the red words from your revision above and they will come back every 3 days until you get them right 3 times in a row.':'Nothing here yet.'}));
     return;
