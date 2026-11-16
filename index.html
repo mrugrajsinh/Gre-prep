@@ -384,6 +384,9 @@ function bar(label,val,max,cls,shown){
 
 /* ---------- analysis ---------- */
 function dueWords(){var t=today();return S.words.filter(function(w){return !w.mastered&&(w.due||t)<=t;});}
+var WEAK_CAP=15;
+function revisedToday(){var t=today();return S.words.filter(function(w){return w.last===t;}).length;}
+function todayWeak(){var left=Math.max(0,WEAK_CAP-revisedToday());return dueWords().sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:((b.misses||0)-(a.misses||0)));}).slice(0,left);}
 /* end-of-module quiz rotation */
 function eomDoneUpTo(){var m=S.meta.quantmods||{};return parseInt(m.done,10)||0;}
 function eomLogs(){return S.quant.filter(function(d){return d.kind==='quiz'&&d.eom;});}
@@ -512,7 +515,7 @@ function renderToday(){
   var body=$('#todayBody');
   if(S.rev){body.hidden=true;return;}
   body.hidden=false;body.textContent='';
-  var due=dueWords();
+  var due=todayWeak(),dueAll=dueWords().length;
   var t=today();
   var dd=S.daily[t]||{};
   var done=DAILY.filter(function(x){return dd[x[0]];}).length;
@@ -520,10 +523,10 @@ function renderToday(){
   body.append(el('div',{class:'card'},
     el('h2',{text:'Words to review'}),
     el('div',{class:'stat'},
-      el('div',null,el('div',{class:'big',text:due.length}),el('div',{class:'muted small',text:due.length===1?'word is due today':'words are due today'})),
+      el('div',null,el('div',{class:'big',text:due.length}),el('div',{class:'muted small',text:(due.length===1?'weak word to revise today':'weak words to revise today')+(dueAll>due.length?' ('+(dueAll-due.length)+' wait for later days)':'')})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return !w.mastered;}).length}),el('div',{class:'muted small',text:'weak words in rotation'})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return w.mastered;}).length}),el('div',{class:'muted small',text:'mastered'})),el('div',null,el('div',{class:'big',text:cdSaved()}),el('div',{class:'muted small',text:'of '+S.fileBank.size+' words covered'})),el('div',null,el('div',{class:'big',text:knownList().length}),el('div',{class:'muted small',text:'known on first sight'}))),
-    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Today\u2019s 80 words'),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:function(){cdStartWeak(dueWords());}},due.length?'Review due words':'Nothing due'))
+    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Today\u2019s 80 words'),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:function(){cdStartWeak(todayWeak());}},due.length?'Revise '+due.length+' weak words':'Weak words done for today'))
   ));
 
   var list=el('div',null);
@@ -633,7 +636,7 @@ function renderWords(){
     return !q||(w.word||'').toLowerCase().indexOf(q)>=0||(w.meaning||'').toLowerCase().indexOf(q)>=0;
   }).sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:(a.word<b.word?-1:1));});
   var list=$('#wList');list.textContent='';
-  if(S.wf!=='mastered')list.append(el('div',{class:'card'},el('h2',{text:'Revise weak words'}),el('p',{class:'muted small',style:'margin:0',text:'Flashcards with only your weak words. Miss one and it stays weak and comes back in 3 days. Get it right 3 times in a row and it is mastered.'}),weakButtons()));
+  if(S.wf!=='mastered')list.append(el('div',{class:'card'},el('h2',{text:'Revise weak words'}),el('p',{class:'muted small',style:'margin:0',text:'Up to 15 weak words a day, the longest-waiting first; the rest wait for the next day. Miss one and it stays weak and comes back in 3 days. Get it right 3 times in a row and it is mastered.'}),weakButtons()));
   if(!items.length){
     list.append(el('div',{class:'card muted',text:S.wf==='due'?'No words are due. Add the red words from your revision above and they will come back every 3 days until you get them right 3 times in a row.':'Nothing here yet.'}));
     return;
@@ -1264,13 +1267,13 @@ function cdStartWeak(src){
   go('cards');
 }
 function weakAll(){return S.words.filter(function(w){return !w.mastered;});}
-function weakButtons(){var d=dueWords().length,a=weakAll().length;
+function weakButtons(){var d=todayWeak().length,a=weakAll().length,da=dueWords().length;
   return el('div',{class:'row'},
-    el('button',{class:'btn',type:'button',disabled:d===0?true:null,onclick:function(){cdStartWeak(dueWords());}},d?'Revise '+d+' due weak word'+(d===1?'':'s')+' as cards':'No weak words due'),
+    el('button',{class:'btn',type:'button',disabled:d===0?true:null,onclick:function(){cdStartWeak(todayWeak());}},d?'Revise today\u2019s '+d+' weak word'+(d===1?'':'s')+' as cards':(da?'Today\u2019s '+WEAK_CAP+' weak words done':'No weak words due')),
     el('button',{class:'btn ghost',type:'button',disabled:a===0?true:null,onclick:function(){cdStartWeak(weakAll());}},'All '+a+' weak words as cards'));}
 function cdStart(){
   var c=S.cd,all=deckWords(),n=Math.max(1,Math.min(200,c.size||80));
-  var due=dueWords().slice(0,n).map(function(w){var k=(w.word||'').toLowerCase(),b=S.bank.get(k)||{};return {w:k,m:w.meaning||b.m||'',s:w.syn||b.s||'',o:b.o||'',g:b.g||w.grp||'',ai:b.ai,src:w.src||b.src||'',rev:w.id};});
+  var due=todayWeak().slice(0,n).map(function(w){var k=(w.word||'').toLowerCase(),b=S.bank.get(k)||{};return {w:k,m:w.meaning||b.m||'',s:w.syn||b.s||'',o:b.o||'',g:b.g||w.grp||'',ai:b.ai,src:w.src||b.src||'',rev:w.id};});
   var s=Math.max(0,Math.min(all.length,(c.start==null?cdSaved()+1:c.start)-1));
   var fresh=all.slice(s,s+(n-due.length)).map(function(x){return Object.assign({},x);});
   if(c.shuffle)fresh=shuffle(fresh);
@@ -1306,7 +1309,7 @@ function cdAnswer(ok){
       if(w){
         if(!c.orig[i])c.orig[i]={box:w.box||0,seen:w.seen||0,misses:w.misses||0};
         var o=c.orig[i],box=ok?Math.min(o.box+1,3):0;
-        patch('words',w.id,box>=3?{box:3,mastered:true,due:'',seen:o.seen+1}:{box:box,mastered:false,due:addDays(today(),INT[box]),seen:o.seen+1,misses:o.misses+(ok?0:1)});
+        patch('words',w.id,box>=3?{box:3,mastered:true,due:'',seen:o.seen+1,last:today()}:{box:box,mastered:false,due:addDays(today(),INT[box]),seen:o.seen+1,misses:o.misses+(ok?0:1),last:today()});
       }
     }else if(mk==='r'){
       if(!weakDoc(x.w))c.added[x.w]=1;
@@ -1324,7 +1327,7 @@ function renderCards(){
   var c=S.cd;
   if(!S.fileBank.size){box.append(el('div',{class:'card muted',text:'Loading your word bank...'}));return;}
   if(c.stage==='setup'){
-    var all=deckWords(),saved=cdSaved(),due=dueWords().length,n=c.size||80;
+    var all=deckWords(),saved=cdSaved(),due=todayWeak().length,n=c.size||80;
     var st=el('input',{type:'number',id:'cdStart',min:'1',max:String(all.length),value:String(c.start==null?saved+1:c.start),oninput:function(){c.start=parseInt(this.value,10)||1;}});
     var sz=el('input',{type:'number',id:'cdSize',min:'1',max:'200',value:String(n),oninput:function(){c.size=parseInt(this.value,10)||80;}});
     var sh=el('input',{type:'checkbox',id:'cdShuf',style:'width:auto',checked:c.shuffle?true:null,onchange:function(){c.shuffle=this.checked;}});
