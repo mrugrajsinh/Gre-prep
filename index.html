@@ -719,6 +719,48 @@ function renderVerbal(){
 }
 
 /* quant */
+function optsOf(id){var s=$('#'+id);return s?Array.prototype.map.call(s.options,function(o){return o.text;}):[];}
+function selEl(list,v){var s=el('select');list.forEach(function(t){s.append(el('option',{text:t}));});if(v&&list.indexOf(v)<0)s.append(el('option',{text:v}));s.value=v||list[0]||'';return s;}
+function inEl(type,v){var i=el('input',{type:type});i.value=(v==null?'':v);return i;}
+function taEl(v){var t=el('textarea');t.value=v||'';return t;}
+function qEditor(d){
+  var box=el('div',{class:'item'}),f={};
+  f.date=inEl('date',d.date);
+  if(d.kind==='quiz'){
+    f.label=inEl('text',d.label);if(!d.eom)f.topic=selEl(TOPICS,d.topic);
+    f.c=inEl('number',d.correct);f.t=inEl('number',d.total);f.p=inEl('number',d.pct);
+    box.append(el('h3',{text:'Edit quiz'}),el('div',{class:'row'},el('label',null,'Date',f.date),el('label',null,'Module and part',f.label)),
+      f.topic?el('label',null,'Topic',f.topic):null,
+      el('div',{class:'row'},el('label',null,'Correct',f.c),el('label',null,'Total',f.t),el('label',null,'Or score %',f.p)));
+  }else{
+    f.topic=selEl(TOPICS,d.topic);f.fmt=selEl(optsOf('qmFmt'),d.fmt);f.ref=inEl('text',d.ref==='Not specified'?'':d.ref);f.err=selEl(optsOf('qmType'),d.errType);
+    f.q=taEl(d.q);f.why=taEl(d.why);f.next=taEl(d.next);
+    box.append(el('h3',{text:'Edit missed question'}),el('label',null,'The question',f.q),
+      el('div',{class:'row'},el('label',null,'Topic',f.topic),el('label',null,'Format',f.fmt)),
+      el('div',{class:'row'},el('label',null,'Date',f.date),el('label',null,'Source',f.ref)),
+      el('label',null,'Type of error',f.err),el('label',null,'Why it went wrong',f.why),el('label',null,'Different method to try next time',f.next));
+  }
+  var busy=false;
+  function saveIt(){
+    if(busy)return;var upd={date:f.date.value||d.date};
+    if(d.kind==='quiz'){
+      var c=parseInt(f.c.value,10),t=parseInt(f.t.value,10),p=parseFloat(f.p.value);
+      if(t>0&&c>=0&&c<=t){upd.correct=c;upd.total=t;upd.pct=Math.round(c/t*100);}
+      else if(!isNaN(p)&&p>=0&&p<=100){upd.pct=Math.round(p);upd.correct=null;upd.total=null;}
+      else{toast('Enter correct and total, or a score percentage.');return;}
+      upd.label=f.label.value.trim();if(f.topic)upd.topic=f.topic.value;
+      if(d.eom&&!/M\s*\d+/i.test(upd.label)){toast('Keep the module in the label, for example M3.');return;}
+    }else{
+      upd.topic=f.topic.value;upd.fmt=f.fmt.value;upd.ref=f.ref.value.trim()||'Not specified';upd.errType=f.err.value;
+      upd.q=f.q.value.trim().slice(0,2000);upd.why=f.why.value.trim();upd.next=f.next.value.trim();
+      if(upd.q!==(d.q||''))upd.tags=detectQ(upd.q).tags.map(function(x){return x.id;});
+    }
+    busy=true;patch('quant',d.id,upd).then(function(ok){busy=false;if(!ok)return;toast('Saved');S.qEdit=null;renderQuant();});
+  }
+  box.append(el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:saveIt},'Save changes'),el('button',{class:'btn ghost',type:'button',onclick:function(){S.qEdit=null;renderQuant();}},'Cancel')));
+  return box;
+}
+function qEditBtn(d){return el('button',{class:'btn small ghost',type:'button',onclick:function(){S.qEdit=d.id;renderQuant();}},'Edit');}
 function renderQuant(){
   renderQD();
   var rows=qAnalysis(),st=$('#qStats');st.textContent='';
@@ -738,12 +780,13 @@ function renderQuant(){
   var l=$('#qList');l.textContent='';
   S.quant.slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1;}).slice(0,40).forEach(function(d){
     if(d.kind==='qdrill'){l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:'ETS-style drill '+d.day}),el('span',{class:'chip '+pctClass(Math.round(d.correct/d.total*100)),text:d.correct+'/'+d.total})),el('span',{class:'muted small',text:nice(d.date)}),el('div',{class:'row'},el('button',{class:'btn small ghost',type:'button',onclick:function(){qdReview(d);}},'Review answers'),delBtn('quant',d.id))));return;}
+    if(S.qEdit===d.id&&d.kind!=='qdrill'){l.append(qEditor(d));return;}
     if(d.kind==='quiz'){
       l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:(d.eom?'End-of-module quiz':'Quiz · '+d.topic)+(d.label?' · '+d.label:'')}),el('span',{class:'chip '+pctClass(d.pct),text:d.pct+'%'})),
-        el('span',{class:'muted small',text:nice(d.date)+(d.total?' · '+d.correct+'/'+d.total:'')}),el('div',null,delBtn('quant',d.id))));
+        el('span',{class:'muted small',text:nice(d.date)+(d.total?' · '+d.correct+'/'+d.total:'')}),el('div',{class:'row'},qEditBtn(d),delBtn('quant',d.id))));
     }else{
       l.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:d.topic+' · '+d.ref}),el('span',{class:'chip bad',text:d.errType})),
-        el('span',{class:'muted small',text:nice(d.date)+(d.fmt?' \u00b7 '+d.fmt:'')}),d.q?el('p',{class:'small',style:'white-space:pre-line;border-left:3px solid var(--line);padding-left:8px',text:d.q.length>400?d.q.slice(0,400)+'...':d.q}):null,(d.tags&&d.tags.length)?el('div',{class:'tags'},d.tags.map(function(x){var lg=logicById(x);return lg?el('span',{class:'chip warn',title:lg.tip,text:lg.label}):null;})):null,d.why?el('p',{class:'small',text:'Why: '+d.why}):null,d.next?el('div',{class:'tip',text:'Try next: '+d.next}):null,el('div',null,delBtn('quant',d.id))));
+        el('span',{class:'muted small',text:nice(d.date)+(d.fmt?' \u00b7 '+d.fmt:'')}),d.q?el('p',{class:'small',style:'white-space:pre-line;border-left:3px solid var(--line);padding-left:8px',text:d.q.length>400?d.q.slice(0,400)+'...':d.q}):null,(d.tags&&d.tags.length)?el('div',{class:'tags'},d.tags.map(function(x){var lg=logicById(x);return lg?el('span',{class:'chip warn',title:lg.tip,text:lg.label}):null;})):null,d.why?el('p',{class:'small',text:'Why: '+d.why}):null,d.next?el('div',{class:'tip',text:'Try next: '+d.next}):null,el('div',{class:'row'},qEditBtn(d),delBtn('quant',d.id))));
     }
   });
 }
