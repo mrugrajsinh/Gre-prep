@@ -388,6 +388,36 @@ var WEAK_CAP=30;
 function revisedToday(){var t=today();return S.words.filter(function(w){return w.last===t;}).length;}
 function todayWeak(){var left=Math.max(0,WEAK_CAP-revisedToday());return dueWords().sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:((b.misses||0)-(a.misses||0)));}).slice(0,left);}
 /* end-of-module quiz rotation */
+/* 5-day redo queue for missed questions */
+var REDO_GAP=5;
+function redoDue(d){return d.redoDue||addDays(d.date||today(),REDO_GAP);}
+function redoList(){var t=today(),out=[];
+  S.quant.forEach(function(d){if(d.kind==='miss'&&!d.redoDone&&redoDue(d)<=t)out.push({d:d,col:'quant'});});
+  S.verbal.forEach(function(d){if(d.kind==='miss'&&!d.redoDone&&redoDue(d)<=t)out.push({d:d,col:'verbal'});});
+  out.sort(function(a,b){var x=redoDue(a.d),y=redoDue(b.d);return x<y?-1:(x>y?1:0);});return out;}
+function redoPending(){var n=0;S.quant.concat(S.verbal).forEach(function(d){if(d.kind==='miss'&&!d.redoDone)n++;});return n;}
+function redoAnswer(it,ok){var d=it.d,s=d.redoStreak||0,u;
+  if(ok){s++;u=s>=2?{redoStreak:s,redoDone:true,redoLast:today()}:{redoStreak:s,redoDue:addDays(today(),REDO_GAP),redoLast:today()};}
+  else u={redoStreak:0,redoDue:addDays(today(),REDO_GAP),redoMisses:(d.redoMisses||0)+1,redoLast:today()};
+  S.rdShow=false;patch(it.col,d.id,u).then(function(r){if(r!==false)toast(ok?(u.redoDone?'Cleared: right twice in a row':'Good. Back in '+REDO_GAP+' days for one more check'):'Back in '+REDO_GAP+' days');render();});}
+function redoCard(){
+  var list=redoList(),c=el('div',{class:'card'},el('h2',{text:'Redo missed questions'}));
+  if(!list.length){var p=redoPending();c.append(el('p',{class:'muted small',style:'margin:0',text:p?('Nothing due today. '+p+' missed question'+(p===1?'':'s')+' waiting; each comes back '+REDO_GAP+' days after you log it.'):'Log missed questions in the Quant or TC/SC tab and they come back here '+REDO_GAP+' days later.'}));return c;}
+  var it=list[0],d=it.d,isQ=it.col==='quant';
+  c.append(el('p',{class:'small',style:'margin:0',text:list.length+' due today · solve it again before you reveal your notes. Right twice in a row clears it.'}));
+  var head=isQ?((d.topic||'Quant')+(d.fmt?' · '+d.fmt:'')):('Verbal · '+(d.type||''));
+  var box=el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:head}),el('span',{class:'muted small',text:'Missed '+nice(d.date)+(d.redoMisses?' · missed again '+d.redoMisses+'×':'')})),
+    d.ref&&d.ref!=='Not specified'?el('p',{class:'muted small',style:'margin:0',text:'Source: '+d.ref}):null);
+  if(isQ&&d.q)box.append(el('p',{style:'white-space:pre-line;border-left:3px solid var(--line);padding-left:8px;margin:0',text:d.q}));
+  if(!isQ&&d.why&&/____/.test(d.why))box.append(el('p',{style:'white-space:pre-line;border-left:3px solid var(--line);padding-left:8px;margin:0',text:d.why}));
+  if(!S.rdShow){box.append(el('div',null,el('button',{class:'btn ghost small',type:'button',onclick:function(){S.rdShow=true;render();}},'I have solved it – show my notes')));}
+  else{
+    if(isQ){if(d.errType)box.append(el('span',{class:'chip',text:d.errType}));if(d.why)box.append(el('p',{style:'margin:0',text:'Why: '+d.why}));if(d.next)box.append(el('div',{class:'tip',text:'Try next: '+d.next}));}
+    else{if(d.right)box.append(el('p',{style:'margin:0',text:'Right answer: '+d.right+(d.mine?' (you chose '+d.mine+')':'')}));if(d.reason)box.append(el('span',{class:'chip',text:d.reason}));if(d.why&&!/____/.test(d.why))box.append(el('p',{style:'margin:0',text:'Why: '+d.why}));if(d.fix)box.append(el('div',{class:'tip',text:d.fix}));}
+    box.append(el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){redoAnswer(it,true);}},'Got it right'),el('button',{class:'btn ghost',type:'button',onclick:function(){redoAnswer(it,false);}},'Missed again')));
+  }
+  c.append(box);return c;
+}
 function eomDoneUpTo(){var m=S.meta.quantmods||{};return parseInt(m.done,10)||0;}
 function eomLogs(){return S.quant.filter(function(d){return d.kind==='quiz'&&d.eom;});}
 function eomModOf(d){var r=/M\s*(\d+)/i.exec(d.label||'');return r?parseInt(r[1],10):null;}
@@ -547,6 +577,7 @@ function renderToday(){
       dlg.length?el('p',{style:'margin:0',text:'Done today ('+dlg.length+' of 2\u20133): '+dlg.map(function(a){return a.title+' \u00b7 '+a.correct+'/'+a.total;}).join(', ')}):(nxp?el('p',{style:'margin:0',text:'Next: Passage '+nxp.day+' \u00b7 '+nxp.title}):null),
       nxp?el('div',null,el('button',{class:dlg.length>=RC_TARGET?'btn ghost':'btn',type:'button',onclick:function(){rcStart(nxp);}},dlg.length?'Do another passage':'Start passage')):null));}
   var nxd=tcNext();
+  body.append(redoCard());
   body.append(eomCard());
   if(S.drills.length){var dld=tcLogs().filter(function(v){return v.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily TC/SC drill'}),
