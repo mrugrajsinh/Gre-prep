@@ -329,7 +329,7 @@ var REASON_TIPS={
  'Careless slip':'Slow down on the final check and re-read the question stem.'
 };
 var INT=[3,3,3];
-var DAILY=[['v','Vocab: 80 new words + up to 30 weak words'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['m','Quant: end-of-module quiz on a finished module'],['a','Reading: 2 to 3 passages with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
+var DAILY=[['v','Vocab: 80 new words + up to 30 weak words'],['f','Quant flashcards: formulas and rules revision'],['x','Verbal: 2 ETS-style sections (12 + 15 questions)'],['y','Quant: 2 ETS-style sections (12 + 15 questions)'],['l','Review: every miss logged with a one-line reason'],['r','Redo: today\u2019s due missed questions']];
 var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',size:80,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null,qdrills:[],qd:null,hooks:{}};
 function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
 function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
@@ -399,7 +399,7 @@ function redoPending(){var n=0;S.quant.concat(S.verbal).forEach(function(d){if(d
 function redoAnswer(it,ok){var d=it.d,s=d.redoStreak||0,u;
   if(ok){s++;u=s>=2?{redoStreak:s,redoDone:true,redoLast:today()}:{redoStreak:s,redoDue:addDays(today(),REDO_GAP),redoLast:today()};}
   else u={redoStreak:0,redoDue:addDays(today(),REDO_GAP),redoMisses:(d.redoMisses||0)+1,redoLast:today()};
-  S.rdShow=false;patch(it.col,d.id,u).then(function(r){if(r!==false)toast(ok?(u.redoDone?'Cleared: right twice in a row':'Good. Back in '+REDO_GAP+' days for one more check'):'Back in '+REDO_GAP+' days');render();});}
+  S.rdShow=false;var left=redoList().filter(function(x){return x.d.id!==d.id;}).length;patch(it.col,d.id,u).then(function(r){if(r!==false&&!left){var t=today(),cur=Object.assign({},S.daily[t]||{});if(!cur.r){cur.r=true;cur.date=t;S.daily[t]=cur;save('daily',t,cur);}}if(r!==false)toast(ok?(u.redoDone?'Cleared: right twice in a row':'Good. Back in '+REDO_GAP+' days for one more check'):'Back in '+REDO_GAP+' days');render();});}
 function redoCard(){
   var list=redoList(),c=el('div',{class:'card'},el('h2',{text:'Redo missed questions'}));
   if(!list.length){var p=redoPending();c.append(el('p',{class:'muted small',style:'margin:0',text:p?('Nothing due today. '+p+' missed question'+(p===1?'':'s')+' waiting; each comes back '+REDO_GAP+' days after you log it.'):'Log missed questions in the Quant or TC/SC tab and they come back here '+REDO_GAP+' days later.'}));return c;}
