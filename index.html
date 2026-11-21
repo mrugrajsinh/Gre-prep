@@ -209,6 +209,7 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
   </section>
 
   <section id="s-verbal" hidden class="wrap" style="gap:14px">
+    <div id="vEts" class="wrap" style="gap:14px"></div>
     <div id="tcBody" class="wrap" style="gap:14px"></div>
     <details class="card">
       <summary>Log a set or a wrong answer from a book</summary>
@@ -249,6 +250,7 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
   </section>
 
   <section id="s-quant" hidden class="wrap" style="gap:14px">
+    <div id="qEts" class="wrap" style="gap:14px"></div>
     <div id="qdBody" class="wrap" style="gap:14px"></div>
     <form id="qzForm" class="card">
       <h2>Log a quiz score</h2>
@@ -388,6 +390,96 @@ var WEAK_CAP=30;
 function revisedToday(){var t=today();return S.words.filter(function(w){return w.last===t;}).length;}
 function todayWeak(){var left=Math.max(0,WEAK_CAP-revisedToday());return dueWords().sort(function(a,b){return (a.due||'')<(b.due||'')?-1:((a.due||'')>(b.due||'')?1:((b.misses||0)-(a.misses||0)));}).slice(0,left);}
 /* end-of-module quiz rotation */
+/* ---------- ETS practice sections, photo missed questions, likely score ---------- */
+var LETTERS='ABCDEFGHI';
+function sects(sec){return (sec==='V'?S.verbal:S.quant).filter(function(d){return d.kind==='sect';}).sort(function(a,b){return (a.date||'')<(b.date||'')?1:((a.date||'')>(b.date||'')?-1:((b.ts||0)-(a.ts||0)));});}
+function sectScore(d){var t=d.total||0,c=t-(d.wrong||0);if(typeof d.correct==='number')c=d.correct;return {c:c,t:t,p:t?Math.round(c/t*100):0};}
+function likely(){
+  var since=addDays(today(),-21),out={};
+  ['V','Q'].forEach(function(k){var rows=sects(k).filter(function(d){return d.date>=since&&d.total;}).map(function(d){var s=sectScore(d);return {d:d.date,c:s.c,t:s.t};});var w=wAcc(rows);out[k]={acc:w.acc,n:w.n,sc:w.acc==null?null:toScaled(w.acc)};});
+  return out;}
+function likelyCard(){
+  var L=likely(),c=el('div',{class:'card'},el('h2',{text:'Likely GRE score'}));
+  var okV=L.V.n>=20,okQ=L.Q.n>=20;
+  if(!okV&&!okQ){c.append(el('p',{class:'muted small',style:'margin:0',text:'Log your ETS sections in the Verbal and Quant tabs. After about 20 questions in each section your likely score appears here, based on the last 3 weeks (recent days count more).'}));return c;}
+  var g=el('div',{class:'stat'});
+  g.append(el('div',null,el('div',{class:'big',text:okV?String(L.V.sc):'–'}),el('div',{class:'muted small',text:'Verbal'+(okV?' ('+Math.round(L.V.acc*100)+'% of '+L.V.n+' Qs)':' (need 20+ Qs)')})));
+  g.append(el('div',null,el('div',{class:'big',text:okQ?String(L.Q.sc):'–'}),el('div',{class:'muted small',text:'Quant'+(okQ?' ('+Math.round(L.Q.acc*100)+'% of '+L.Q.n+' Qs)':' (need 20+ Qs)')})));
+  if(okV&&okQ){var tot=L.V.sc+L.Q.sc;g.append(el('div',null,el('div',{class:'big',text:(tot-4)+'–'+(tot+4)}),el('div',{class:'muted small',text:'Likely total (midpoint '+tot+')'})));}
+  c.append(g,el('p',{class:'muted small',style:'margin:0',text:'An estimate from your logged ETS sections, last 3 weeks. Practice sets are not adaptive, so trust PowerPrep scores more when you have them.'}));
+  return c;}
+function etsTodayCard(){
+  var t=today(),v=sects('V').filter(function(d){return d.date===t;}),q=sects('Q').filter(function(d){return d.date===t;});
+  var c=el('div',{class:'card'},el('h2',{text:'Today’s ETS sections'}));
+  function line(lbl,arr){return el('p',{style:'margin:0',text:lbl+': '+(arr.length?arr.map(function(d){var s=sectScore(d);return (d.label||'Section')+' '+s.c+'/'+s.t;}).join(', '):'none logged yet')+' ('+arr.length+' of 2)'});}
+  c.append(line('Verbal',v),line('Quant',q),el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('verbal');}},'Log Verbal'),el('button',{class:'btn ghost',type:'button',onclick:function(){go('quant');}},'Log Quant')));
+  return c;}
+function tickIf(key,cond){if(!cond)return;var t=today(),cur=Object.assign({},S.daily[t]||{});if(cur[key])return;cur[key]=true;cur.date=t;S.daily[t]=cur;save('daily',t,cur);}
+function sectForm(sec){
+  var col=sec==='V'?'verbal':'quant',dt=el('input',{type:'date'});dt.value=today();
+  var lb=el('input',{type:'text',placeholder:'e.g. OG set 4 · Section 1'}),tt=el('input',{type:'number',min:'1',max:'50'});tt.value='12';
+  var wr=el('input',{type:'number',min:'0',max:'50',placeholder:'0'});
+  var busy=false;
+  function go2(){if(busy)return;var T=parseInt(tt.value,10),W=parseInt(wr.value,10)||0;if(!(T>0)||W<0||W>T){toast('Enter total questions and how many you got wrong.');return;}
+    var doc={kind:'sect',sec:sec,date:dt.value||today(),label:lb.value.trim()||'Section',total:T,wrong:W,correct:T-W,ts:Date.now()};busy=true;
+    save(col,null,doc).then(function(ok){busy=false;if(!ok)return;toast('Saved: '+(T-W)+'/'+T+' ('+Math.round((T-W)/T*100)+'%)');lb.value='';wr.value='';
+      var n=sects(sec).filter(function(d){return d.date===today();}).length+(doc.date===today()?1:0);tickIf(sec==='V'?'x':'y',n>=2);render();});}
+  return el('div',{class:'card'},el('h2',{text:'Log a '+(sec==='V'?'Verbal':'Quant')+' section'}),
+    el('p',{class:'muted small',style:'margin:0',text:'One entry per section. Its own score is shown below; nothing is averaged here.'}),
+    el('div',{class:'row'},el('label',null,'Date',dt),el('label',null,'Name or source',lb)),
+    el('div',{class:'row'},el('label',null,'Total questions',tt),el('label',null,'Wrong',wr)),
+    el('div',{class:'row'},el('button',{class:'btn small ghost',type:'button',onclick:function(){tt.value='12';}},'12-question section'),el('button',{class:'btn small ghost',type:'button',onclick:function(){tt.value='15';}},'15-question section')),
+    el('div',null,el('button',{class:'btn',type:'button',onclick:go2},'Save section')));}
+function sectList(sec){
+  var col=sec==='V'?'verbal':'quant',arr=sects(sec),c=el('div',{class:'card'},el('h2',{text:'Your '+(sec==='V'?'Verbal':'Quant')+' sections'}));
+  if(!arr.length){c.append(el('p',{class:'muted small',style:'margin:0',text:'Nothing logged yet.'}));return c;}
+  arr.slice(0,40).forEach(function(d){var s=sectScore(d);
+    c.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:(d.label||'Section')}),el('span',{class:'chip '+pctClass(s.p),text:s.c+'/'+s.t+' · '+s.p+'%'})),
+      el('span',{class:'muted small',text:nice(d.date)+' · this section on its own ≈ '+toScaled(s.p/100)+' (rough)'}),el('div',null,delBtn(col,d.id))));});
+  return c;}
+var TESS_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',TESS_LANG='https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int';
+function loadTess(){if(window.Tesseract)return Promise.resolve();return new Promise(function(res,rej){var s=document.createElement('script');s.src=TESS_URL;s.onload=function(){res();};s.onerror=function(){rej(new Error('load'));};document.head.appendChild(s);});}
+function parseOcr(txt){
+  var lines=txt.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean),q=[],opts=[],re=/^(?:\(?([A-Ia-i])\s*[\)\.\]:](?:\s|$)|[○◯●□☐©®@]\s*|[Oo0]\s+(?=[A-Z0-9\-\(\$]))\s*(.*)$/;
+  lines.forEach(function(l){var m=re.exec(l);if(m&&(opts.length||q.length)){opts.push(m[2]||'');}else if(opts.length&&!m){opts[opts.length-1]+=' '+l;}else q.push(l);});
+  if(opts.length<2){return {q:lines.join('\n'),opts:[]};}
+  return {q:q.join('\n'),opts:opts.slice(0,9)};}
+function missForm(sec){
+  var col=sec==='V'?'verbal':'quant',st=S['mf'+sec]||(S['mf'+sec]={opts:['','','','',''],ans:{},busy:false,msg:''});
+  var c=el('div',{class:'card'},el('h2',{text:'Add a missed question'}),el('p',{class:'muted small',style:'margin:0',text:'Take a photo or screenshot. The text is read on your phone and only the words are saved, never the photo. Check the text, tick the right answer, save. It comes back in 5 days.'}));
+  var file=el('input',{type:'file',accept:'image/*'}),msg=el('p',{class:'muted small',style:'margin:0',text:st.msg||''});
+  var qt=el('textarea',{rows:'5',placeholder:'Question text'});qt.value=st.q||'';qt.oninput=function(){st.q=qt.value;};
+  file.onchange=function(){var f=file.files&&file.files[0];if(!f)return;st.msg='Reading the photo… (first time takes ~20 s)';msg.textContent=st.msg;
+    loadTess().then(function(){return window.Tesseract.recognize(f,'eng',{langPath:TESS_LANG,logger:function(m){if(m.status==='recognizing text'){msg.textContent='Reading… '+Math.round((m.progress||0)*100)+'%';}}});})
+      .then(function(r){var p=parseOcr((r&&r.data&&r.data.text)||'');st.q=p.q;if(p.opts.length){st.opts=p.opts;while(st.opts.length<4)st.opts.push('');}st.ans={};st.msg='Done. Check the text and options below, fix anything misread (maths symbols often need fixing).';file.value='';renderEtsOnly(sec);})
+      .catch(function(){st.msg='Could not read the photo here. Type the question and options instead.';msg.textContent=st.msg;});};
+  c.append(el('label',null,'Photo or screenshot',file),msg,el('label',null,'Question',qt));
+  var ol=el('div',{class:'list'});
+  st.opts.forEach(function(o,i){var inp=el('input',{type:'text',placeholder:'Option '+LETTERS[i]});inp.value=o;inp.oninput=function(){st.opts[i]=inp.value;};
+    var cb=el('input',{type:'checkbox',style:'width:auto'});cb.checked=!!st.ans[LETTERS[i]];cb.onchange=function(){st.ans[LETTERS[i]]=cb.checked;};
+    ol.append(el('div',{class:'row',style:'align-items:center;flex-wrap:nowrap'},el('strong',{text:LETTERS[i],style:'width:1.2em'}),inp,el('label',{style:'flex:0 0 auto;flex-direction:row;align-items:center;gap:4px'},cb,'right')));});
+  c.append(el('p',{class:'small',style:'margin:0',text:'Options – tick the right answer(s):'}),ol,el('div',{class:'row'},
+    st.opts.length<9?el('button',{class:'btn small ghost',type:'button',onclick:function(){st.opts.push('');renderEtsOnly(sec);}},'Add option'):null,
+    st.opts.length>2?el('button',{class:'btn small ghost',type:'button',onclick:function(){st.opts.pop();renderEtsOnly(sec);}},'Remove last option'):null));
+  var num=null;if(sec==='Q'){num=el('input',{type:'text',placeholder:'e.g. 3/8 or 12.5'});num.value=st.num||'';num.oninput=function(){st.num=num.value;};c.append(el('label',null,'Numeric-entry answer (instead of options)',num));}
+  var recent=sects(sec).slice(0,8),ss=el('select');ss.append(el('option',{value:'',text:'(not linked)'}));recent.forEach(function(d){var o=el('option',{value:d.id,text:nice(d.date)+' · '+(d.label||'Section')});ss.append(o);});if(st.sid)ss.value=st.sid;ss.onchange=function(){st.sid=ss.value;};
+  var tp=sec==='Q'?selEl(TOPICS,st.topic||TOPICS[0]):selEl(['TC','SE','RC'],st.type||'TC');tp.onchange=function(){if(sec==='Q')st.topic=tp.value;else st.type=tp.value;};
+  var why=el('input',{type:'text',placeholder:'One line: why you got it wrong'});why.value=st.why||'';why.oninput=function(){st.why=why.value;};
+  c.append(el('div',{class:'row'},el('label',null,'From section',ss),el('label',null,sec==='Q'?'Topic':'Type',tp)),el('label',null,'Why it went wrong',why));
+  function saveIt(){if(st.busy)return;var q=(st.q||'').trim(),opts=st.opts.map(function(x){return (x||'').trim();}),ans=LETTERS.split('').filter(function(L,i){return st.ans[L]&&opts[i];}),nm=(st.num||'').trim();
+    while(opts.length&&!opts[opts.length-1])opts.pop();
+    if(!q){toast('Add the question text.');return;}
+    if(!ans.length&&!nm){toast('Tick the right answer, or enter the numeric answer.');return;}
+    var sd=recent.filter(function(d){return d.id===st.sid;})[0];
+    var doc={kind:'miss',date:today(),q:q.slice(0,3000),opts:nm?[]:opts,ans:nm?[]:ans,num:nm||'',why:(st.why||'').trim(),ref:sd?(sd.label||'Section')+' · '+nice(sd.date):'ETS practice',sectId:sd?sd.id:'',ocr:true};
+    if(sec==='Q'){doc.topic=st.topic||TOPICS[0];doc.fmt=nm?'Numeric entry':(/quantity a/i.test(q)?'Quantitative Comparison':(ans.length>1?'Select all that apply':'Multiple choice'));doc.errType='Not sure';try{doc.tags=detectQ(q+' '+opts.join(' ')).tags.map(function(x){return x.id;});}catch(e){doc.tags=[];}}
+    else{doc.type=st.type||'TC';doc.right=ans.join(', ');doc.reason='Not sure';}
+    st.busy=true;save(col,null,doc).then(function(ok){st.busy=false;if(!ok)return;toast('Saved. It comes back in 5 days.');S['mf'+sec]=null;renderEtsOnly(sec);});}
+  c.append(el('div',null,el('button',{class:'btn',type:'button',onclick:saveIt},'Save missed question')));
+  return c;}
+function renderEtsOnly(sec){var box=$(sec==='V'?'#vEts':'#qEts');if(!box)return;box.textContent='';box.append(sectForm(sec),missForm(sec),sectList(sec));}
+function renderEts(sec){renderEtsOnly(sec);}
+function numEq(a,b){function v(x){x=String(x).replace(/\s/g,'');var m=/^(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/.exec(x);if(m)return parseFloat(m[1])/parseFloat(m[2]);return parseFloat(x);}var x=v(a),y=v(b);return !isNaN(x)&&!isNaN(y)&&Math.abs(x-y)<1e-6;}
 /* 5-day redo queue for missed questions */
 var REDO_GAP=5;
 function redoDue(d){return d.redoDue||addDays(d.date||today(),REDO_GAP);}
@@ -410,7 +502,15 @@ function redoCard(){
     d.ref&&d.ref!=='Not specified'?el('p',{class:'muted small',style:'margin:0',text:'Source: '+d.ref}):null);
   if(isQ&&d.q)box.append(el('p',{style:'white-space:pre-line;border-left:3px solid var(--line);padding-left:8px;margin:0',text:d.q}));
   if(!isQ&&d.why&&/____/.test(d.why))box.append(el('p',{style:'white-space:pre-line;border-left:3px solid var(--line);padding-left:8px;margin:0',text:d.why}));
-  if(!S.rdShow){box.append(el('div',null,el('button',{class:'btn ghost small',type:'button',onclick:function(){S.rdShow=true;render();}},'I have solved it – show my notes')));}
+  var hasO=d.opts&&d.opts.length&&d.ans&&d.ans.length,hasN=!!d.num;
+  if((hasO||hasN)&&S.rdRes==null){
+    if(hasO){var pick=S.rdPick||(S.rdPick={});var multi=d.ans.length>1;d.opts.forEach(function(o,i){var L=LETTERS[i];box.append(el('button',{class:'btn '+(pick[L]?'':'ghost'),type:'button',style:'text-align:left;justify-content:flex-start;white-space:normal',onclick:function(){if(!multi)S.rdPick={};S.rdPick[L]=!pick[L];render();}},L+'. '+o));});if(multi)box.append(el('p',{class:'muted small',style:'margin:0',text:'Select all that apply.'}));}
+    var ni=null;if(hasN){ni=el('input',{type:'text',placeholder:'Your answer'});box.append(ni);}
+    box.append(el('div',null,el('button',{class:'btn',type:'button',onclick:function(){var ok;if(hasN){ok=numEq(ni.value,d.num);S.rdMine=ni.value;}else{var sel=Object.keys(S.rdPick||{}).filter(function(k){return S.rdPick[k];}).sort().join(',');if(!sel){toast('Pick an answer first.');return;}ok=sel===d.ans.slice().sort().join(',');S.rdMine=sel;}S.rdRes=ok;S.rdShow=true;render();}},'Check answer')));
+    c.append(box);return c;
+  }
+  if((hasO||hasN)&&S.rdRes!=null){box.append(el('div',{class:'tip',text:(S.rdRes?'Correct.':'Not quite.')+' Answer: '+(hasN?d.num:d.ans.join(', '))+(S.rdMine?' \u00b7 you chose '+S.rdMine:'')}));if(d.why)box.append(el('p',{style:'margin:0',text:'Your note: '+d.why}));box.append(el('div',null,el('button',{class:'btn',type:'button',onclick:function(){var r=S.rdRes;S.rdRes=null;S.rdPick=null;S.rdMine=null;redoAnswer(it,r);}},'Next')));c.append(box);return c;}
+  if(!S.rdShow){box.append(el('div',null,el('button',{class:'btn ghost small',type:'button',onclick:function(){S.rdShow=true;render();}},'I have solved it \u2013 show my notes')));}
   else{
     if(isQ){if(d.errType)box.append(el('span',{class:'chip',text:d.errType}));if(d.why)box.append(el('p',{style:'margin:0',text:'Why: '+d.why}));if(d.next)box.append(el('div',{class:'tip',text:'Try next: '+d.next}));}
     else{if(d.right)box.append(el('p',{style:'margin:0',text:'Right answer: '+d.right+(d.mine?' (you chose '+d.mine+')':'')}));if(d.reason)box.append(el('span',{class:'chip',text:d.reason}));if(d.why&&!/____/.test(d.why))box.append(el('p',{style:'margin:0',text:'Why: '+d.why}));if(d.fix)box.append(el('div',{class:'tip',text:d.fix}));}
@@ -533,7 +633,7 @@ function renderStatus(){
 function renderTabs(){
   var nav=$('#tabs');nav.textContent='';
   var due=S.db?dueWords().length:0;
-  [['today','Today'],['dash','Dashboard'],['cards','Cards'],['words','Words'],['articles','Articles'],['verbal','TC/SC'],['quant','Quant']].forEach(function(t){
+  [['today','Today'],['dash','Dashboard'],['cards','Cards'],['words','Words'],['verbal','Verbal'],['quant','Quant']].forEach(function(t){
     var b=el('button',{type:'button','aria-current':S.tab===t[0]?'true':'false',onclick:function(){go(t[0]);}},t[1]);
     if(t[0]==='words'&&due>0)b.append(el('span',{class:'badge',text:due}));
     nav.append(b);
@@ -572,19 +672,20 @@ function renderToday(){
   body.append(el('div',{class:'card'},el('div',{class:'row',style:'justify-content:space-between;align-items:center'},el('h2',{text:'Today’s plan'}),el('span',{class:'chip '+(done===DAILY.length?'good':''),text:done+' of '+DAILY.length})),list,week));
 
   var nxp=rcNextPassage();
-  if(S.passages.length){var dlg=rcLogs().filter(function(a){return a.date===t;});
+  if(false&&S.passages.length){var dlg=rcLogs().filter(function(a){return a.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily reading'}),
       dlg.length?el('p',{style:'margin:0',text:'Done today ('+dlg.length+' of 2\u20133): '+dlg.map(function(a){return a.title+' \u00b7 '+a.correct+'/'+a.total;}).join(', ')}):(nxp?el('p',{style:'margin:0',text:'Next: Passage '+nxp.day+' \u00b7 '+nxp.title}):null),
       nxp?el('div',null,el('button',{class:dlg.length>=RC_TARGET?'btn ghost':'btn',type:'button',onclick:function(){rcStart(nxp);}},dlg.length?'Do another passage':'Start passage')):null));}
   var nxd=tcNext();
   body.append(redoCard());
-  body.append(eomCard());
-  if(S.drills.length){var dld=tcLogs().filter(function(v){return v.date===t;});
+  body.append(likelyCard());
+  body.append(etsTodayCard());
+  if(false&&S.drills.length){var dld=tcLogs().filter(function(v){return v.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily TC/SC drill'}),
       dld.length?el('p',{style:'margin:0',text:'Done today: '+dld[0].type+' \u00b7 '+dld[0].correct+'/'+dld[0].total}):(nxd?el('p',{style:'margin:0',text:'Next: Drill '+nxd.day+' \u00b7 '+nxd.title}):null),
       nxd?el('div',null,el('button',{class:dld.length?'btn ghost':'btn',type:'button',onclick:function(){tcStart(nxd,tcParts(nxd.id).a?'b':null);}},dld.length?'Do another drill':'Start drill')):null));}
   var nxq=qdNext();
-  if(S.qdrills.length){var dlq=qdLogs().filter(function(v){return v.date===t;});
+  if(false&&S.qdrills.length){var dlq=qdLogs().filter(function(v){return v.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily Quant drill (ETS style)'}),
       dlq.length?el('p',{style:'margin:0',text:'Done today: Drill '+dlq[0].day+' \u00b7 '+dlq[0].correct+'/'+dlq[0].total}):(nxq?el('p',{style:'margin:0',text:'Next: Drill '+nxq.day+' \u00b7 '+nxq.title}):null),
       nxq?el('div',null,el('button',{class:dlq.length?'btn ghost':'btn',type:'button',onclick:function(){qdStart(nxq,qdParts(nxq.id).a?'b':null);}},dlq.length?'Do another drill':'Start drill')):null));}
@@ -726,7 +827,7 @@ function renderArticles(){
 
 /* verbal */
 function renderVerbal(){
-  renderTC();
+  renderEts('V');var tb0=$('#tcBody');if(tb0)tb0.hidden=true;
   var va=vAnalysis(),st=$('#vStats');st.textContent='';
   st.append(el('h2',{text:'Why answers go wrong'}));
   var keys=Object.keys(va.reasons).sort(function(a,b){return va.reasons[b]-va.reasons[a];});
@@ -793,7 +894,7 @@ function qEditor(d){
 }
 function qEditBtn(d){return el('button',{class:'btn small ghost',type:'button',onclick:function(){S.qEdit=d.id;renderQuant();}},'Edit');}
 function renderQuant(){
-  renderQD();
+  renderEts('Q');var qb0=$('#qdBody');if(qb0)qb0.hidden=true;
   var rows=qAnalysis(),st=$('#qStats');st.textContent='';
   renderMissInsights(st);
   var card=el('div',{class:'card'},el('h2',{text:'Weak topics, weakest first'}));
