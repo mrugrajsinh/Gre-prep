@@ -329,8 +329,8 @@ var REASON_TIPS={
  'Careless slip':'Slow down on the final check and re-read the question stem.'
 };
 var INT=[3,3,3];
-var DAILY=[['v','Vocab: 50 new words + up to 30 weak words'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['m','Quant: end-of-module quiz on a finished module'],['a','Reading: 2 to 3 passages with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
-var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',size:50,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null,qdrills:[],qd:null,hooks:{}};
+var DAILY=[['v','Vocab: 80 new words + up to 30 weak words'],['q','Quant: 2 new parts, 1 to 2 revision parts, quizzes logged'],['m','Quant: end-of-module quiz on a finished module'],['a','Reading: 2 to 3 passages with questions'],['t','TC/SC: daily drill done'],['d','Quant: ETS-style drill done']];
+var S={db:null,words:[],articles:[],verbal:[],quant:[],daily:{},bank:new Map(),ready:{},tab:'today',wf:'due',wq:'',open:new Set(),rev:null,err:null,timedOut:false,fileBank:new Map(),dbBank:new Map(),groups:new Map(),meta:{},cd:{stage:'setup',size:80,start:null,shuffle:false},passages:[],rc:null,drills:[],tc:null,qdrills:[],qd:null,hooks:{}};
 function rebuildBank(){var m=new Map();S.fileBank.forEach(function(v,k){m.set(k,v);});S.dbBank.forEach(function(v,k){m.set(k,v);});S.bank=m;var g=new Map();m.forEach(function(x){if(x.g){if(!g.has(x.g))g.set(x.g,[]);g.get(x.g).push(x.w);}});S.groups=g;}
 function loadBankFile(){fetch('wordbank.json').then(function(r){return r.ok?r.json():[];}).then(function(list){var m=new Map();list.forEach(function(x){if(x&&x.w)m.set(String(x.w).toLowerCase(),x);});S.fileBank=m;rebuildBank();schedule();}).catch(function(){});}
 
@@ -526,7 +526,7 @@ function renderToday(){
       el('div',null,el('div',{class:'big',text:due.length}),el('div',{class:'muted small',text:(due.length===1?'weak word to revise today':'weak words to revise today')+(dueAll>due.length?' ('+(dueAll-due.length)+' wait for later days)':'')})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return !w.mastered;}).length}),el('div',{class:'muted small',text:'weak words in rotation'})),
       el('div',null,el('div',{class:'big',text:S.words.filter(function(w){return w.mastered;}).length}),el('div',{class:'muted small',text:'mastered'})),el('div',null,el('div',{class:'big',text:cdSaved()}),el('div',{class:'muted small',text:'of '+S.fileBank.size+' words covered'})),el('div',null,el('div',{class:'big',text:knownList().length}),el('div',{class:'muted small',text:'known on first sight'}))),
-    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Today\u2019s '+((S.cd&&S.cd.size)||50)+' new words'+(due.length?' + '+due.length+' weak':'')),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:function(){cdStartWeak(todayWeak());}},due.length?'Revise '+due.length+' weak words':'Weak words done for today'))
+    el('div',{class:'row'},el('button',{class:'btn',type:'button',onclick:function(){go('cards');}},'Today\u2019s '+((S.cd&&S.cd.size)||80)+' new words'+(due.length?' + '+due.length+' weak':'')),el('button',{class:'btn ghost',type:'button',disabled:due.length===0,onclick:function(){cdStartWeak(todayWeak());}},due.length?'Revise '+due.length+' weak words':'Weak words done for today'))
   ));
 
   var list=el('div',null);
@@ -849,10 +849,10 @@ function renderDash(){
   var lt={};S.quant.forEach(function(d){if(d.kind==='miss')(d.tags||[]).forEach(function(x){lt[x]=(lt[x]||0)+1;});});var lk=topKey(lt);
   if(lk&&logicById(lk))acts.push({area:'Quant logic',text:logicById(lk).label+' ('+lt[lk]+' misses). '+logicById(lk).tip});
   var due=dueWords().length,weak=S.words.filter(function(w){return !w.mastered;}).length,cov=cdSaved();
-  if(due)acts.push({area:'Vocab',text:'Clear '+due+' due weak word'+(due===1?'':'s')+' first; they come before today’s 50 new words in Cards.'});
+  if(due)acts.push({area:'Vocab',text:'Clear '+due+' due weak word'+(due===1?'':'s')+' first; they come before today’s 80 new words in Cards.'});
   if(cov>=50&&weak/cov>0.3)acts.push({area:'Vocab',text:Math.round(weak/cov*100)+'% of the words you have covered went to your weak bucket. Say the meaning aloud before flipping each card, and write a hook for every weak word.'});
   var full=0;for(var i=0;i<7;i++){var dv=S.daily[addDays(t,-i)]||{};if(DAILY.every(function(x){return dv[x[0]];}))full++;}
-  if(full<5)acts.push({area:'Consistency',text:'You completed the full plan on '+full+' of the last 7 days. On rough days use Quick 5 and keep the weak words and 50 new words; small days still count.'});
+  if(full<5)acts.push({area:'Consistency',text:'You completed the full plan on '+full+' of the last 7 days. On rough days use Quick 5 and keep the weak words and 80 new words; small days still count.'});
   var ac=el('div',{class:'card'},el('h2',{text:'What to work on next'}));
   if(!acts.length)ac.append(el('p',{class:'muted',style:'margin:0',text:'Not enough data yet. Finish a few drills, passages and quizzes and this list fills in.'}));
   acts.slice(0,6).forEach(function(a,i){ac.append(el('div',{class:'item'},el('div',{class:'head'},el('span',{class:'title',text:(i+1)+'. '+a.area})),el('p',{class:'small',text:a.text})));});
@@ -1305,7 +1305,7 @@ function wkCard(w){var k=(w.word||'').toLowerCase(),b=S.bank.get(k)||{};return {
 function cdStartWeak(src){
   var list=shuffle(src).map(wkCard);
   if(!list.length){toast('No weak words to revise right now.');return;}
-  var sz=(S.cd&&S.cd.size)||50;
+  var sz=(S.cd&&S.cd.size)||80;
   S.cd={stage:'run',weak:true,size:sz,shuffle:false,list:list,i:0,marks:{},orig:{},added:{},draft:{},flip:false,startIdx:cdSaved(),fresh:0,nrev:list.length,total:deckWords().length,start:null};
   go('cards');
 }
@@ -1315,7 +1315,7 @@ function weakButtons(){var d=todayWeak().length,a=weakAll().length,da=dueWords()
     el('button',{class:'btn',type:'button',disabled:d===0?true:null,onclick:function(){cdStartWeak(todayWeak());}},d?'Revise today\u2019s '+d+' weak word'+(d===1?'':'s')+' as cards':(da?'Today\u2019s '+WEAK_CAP+' weak words done':'No weak words due')),
     el('button',{class:'btn ghost',type:'button',disabled:a===0?true:null,onclick:function(){cdStartWeak(weakAll());}},'All '+a+' weak words as cards'));}
 function cdStart(){
-  var c=S.cd,all=deckWords(),n=Math.max(1,Math.min(200,c.size||50));
+  var c=S.cd,all=deckWords(),n=Math.max(1,Math.min(200,c.size||80));
   var due=todayWeak().map(function(w){var k=(w.word||'').toLowerCase(),b=S.bank.get(k)||{};return {w:k,m:w.meaning||b.m||'',s:w.syn||b.s||'',o:b.o||'',g:b.g||w.grp||'',ai:b.ai,src:w.src||b.src||'',rev:w.id};});
   var s=Math.max(0,Math.min(all.length,(c.start==null?cdSaved()+1:c.start)-1));
   var fresh=all.slice(s,s+n).map(function(x){return Object.assign({},x);});
@@ -1370,9 +1370,9 @@ function renderCards(){
   var c=S.cd;
   if(!S.fileBank.size){box.append(el('div',{class:'card muted',text:'Loading your word bank...'}));return;}
   if(c.stage==='setup'){
-    var all=deckWords(),saved=cdSaved(),due=todayWeak().length,n=c.size||50;
+    var all=deckWords(),saved=cdSaved(),due=todayWeak().length,n=c.size||80;
     var st=el('input',{type:'number',id:'cdStart',min:'1',max:String(all.length),value:String(c.start==null?saved+1:c.start),oninput:function(){c.start=parseInt(this.value,10)||1;}});
-    var sz=el('input',{type:'number',id:'cdSize',min:'1',max:'200',value:String(n),oninput:function(){c.size=parseInt(this.value,10)||50;}});
+    var sz=el('input',{type:'number',id:'cdSize',min:'1',max:'200',value:String(n),oninput:function(){c.size=parseInt(this.value,10)||80;}});
     var sh=el('input',{type:'checkbox',id:'cdShuf',style:'width:auto',checked:c.shuffle?true:null,onchange:function(){c.shuffle=this.checked;}});
     var nd=due;
     box.append(el('div',{class:'card'},
