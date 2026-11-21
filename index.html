@@ -439,8 +439,16 @@ function sectList(sec){
   return c;}
 var TESS_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',TESS_LANG='https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int';
 function loadTess(){if(window.Tesseract)return Promise.resolve();return new Promise(function(res,rej){var s=document.createElement('script');s.src=TESS_URL;s.onload=function(){res();};s.onerror=function(){rej(new Error('load'));};document.head.appendChild(s);});}
+function ocrClean(l){l=l.replace(/[^\x20-\x7E–—‘’“”√²³°×÷≤≥π]/g,' ').replace(/\s+/g,' ').trim();var letters=(l.match(/[A-Za-z0-9]/g)||[]).length;return letters?l:'';}
 function parseOcr(txt){
-  var lines=txt.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean),q=[],opts=[],re=/^(?:\(?([A-Ia-i])\s*[\)\.\]:](?:\s|$)|[○◯●□☐©®@]\s*|[Oo0]\s+(?=[A-Z0-9\-\(\$]))\s*(.*)$/;
+  var lines=txt.split(/\r?\n/).map(ocrClean).filter(Boolean);
+  lines=lines.map(function(l){return l.replace(/(\w)\s+,/g,'$1 ____,').replace(/_{2,}/g,'____');});
+  var r=parseOcrLettered(lines);if(r.opts.length>=2)return r;
+  var end=-1;for(var i=lines.length-1;i>=0;i--){if(/[.?!:]["”)]?$/.test(lines[i])||/____/.test(lines[i])){end=i;break;}}
+  if(end>=0&&end<lines.length-1){var tail=lines.slice(end+1);if(tail.length>=2&&tail.length<=9&&tail.every(function(l){return l.split(' ').length<=8;}))return {q:lines.slice(0,end+1).join('\n'),opts:tail};}
+  return {q:lines.join('\n'),opts:[]};}
+function parseOcrLettered(lines){
+  var q=[],opts=[],re=/^(?:\(?([A-Ia-i])\s*[\)\.\]:](?:\s|$)|[○◯●□☐©®@]\s*|[Oo0]\s+(?=[A-Z0-9\-\(\$]))\s*(.*)$/;
   lines.forEach(function(l){var m=re.exec(l);if(m&&(opts.length||q.length)){opts.push(m[2]||'');}else if(opts.length&&!m){opts[opts.length-1]+=' '+l;}else q.push(l);});
   if(opts.length<2){return {q:lines.join('\n'),opts:[]};}
   return {q:q.join('\n'),opts:opts.slice(0,9)};}
