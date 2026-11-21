@@ -680,6 +680,7 @@ function renderToday(){
   body.append(redoCard());
   body.append(likelyCard());
   body.append(etsTodayCard());
+  body.append(exportCard());
   if(false&&S.drills.length){var dld=tcLogs().filter(function(v){return v.date===t;});
     body.append(el('div',{class:'card'},el('h2',{text:'Daily TC/SC drill'}),
       dld.length?el('p',{style:'margin:0',text:'Done today: '+dld[0].type+' \u00b7 '+dld[0].correct+'/'+dld[0].total}):(nxd?el('p',{style:'margin:0',text:'Next: Drill '+nxd.day+' \u00b7 '+nxd.title}):null),
@@ -951,10 +952,38 @@ function trendChart(dd){
   });
   return el('div',null,svg,el('div',{class:'row small',style:'gap:14px'},el('span',null,el('span',{class:'dot',style:'background:var(--warn)'}),' Verbal'),el('span',null,el('span',{class:'dot',style:'background:var(--accent)'}),' Quant')));
 }
+/* ---------- Excel export ---------- */
+var XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+function loadXlsx(){if(window.XLSX)return Promise.resolve();return new Promise(function(res,rej){var s=document.createElement('script');s.src=XLSX_URL;s.onload=function(){res();};s.onerror=function(){rej(new Error('load'));};document.head.appendChild(s);});}
+function redoStatus(d){return d.redoDone?'Cleared':('Due '+redoDue(d)+(d.redoStreak?' (right '+d.redoStreak+'x)':'')+(d.redoMisses?' (missed again '+d.redoMisses+'x)':''));}
+function exportRows(){
+  var L=likely(),sheets={};
+  sheets['Summary']=[{Item:'Exported on',Value:today()},
+    {Item:'Likely Verbal',Value:L.V.n>=20?L.V.sc:'need 20+ questions'},{Item:'Verbal accuracy (3 wks, weighted)',Value:L.V.acc==null?'':Math.round(L.V.acc*100)+'% of '+L.V.n},
+    {Item:'Likely Quant',Value:L.Q.n>=20?L.Q.sc:'need 20+ questions'},{Item:'Quant accuracy (3 wks, weighted)',Value:L.Q.acc==null?'':Math.round(L.Q.acc*100)+'% of '+L.Q.n},
+    {Item:'Weak words in rotation',Value:S.words.filter(function(w){return !w.mastered;}).length},{Item:'Words mastered',Value:S.words.filter(function(w){return w.mastered;}).length},
+    {Item:'Missed questions waiting for redo',Value:redoPending()}];
+  sheets['Sections']=sects('V').concat(sects('Q')).sort(function(a,b){return (a.date||'')<(b.date||'')?-1:1;}).map(function(d){var s=sectScore(d);return {Date:d.date,Section:d.sec==='V'?'Verbal':'Quant',Name:d.label||'',Total:s.t,Wrong:s.t-s.c,Correct:s.c,'Accuracy %':s.p,'Rough scaled (this section alone)':toScaled(s.p/100)};});
+  sheets['Missed Quant']=S.quant.filter(function(d){return d.kind==='miss';}).sort(function(a,b){return (a.date||'')<(b.date||'')?-1:1;}).map(function(d){return {Date:d.date,Topic:d.topic||'',Format:d.fmt||'',Source:d.ref||'',Question:d.q||'',Options:(d.opts||[]).map(function(o,i){return LETTERS[i]+'. '+o;}).join(' | '),'Right answer':d.num||(d.ans||[]).join(', '),'Error type':d.errType||'',Why:d.why||'','Try next':d.next||'',Redo:redoStatus(d)};});
+  sheets['Missed Verbal']=S.verbal.filter(function(d){return d.kind==='miss';}).sort(function(a,b){return (a.date||'')<(b.date||'')?-1:1;}).map(function(d){return {Date:d.date,Type:d.type||'',Source:d.ref||'',Question:d.q||'',Options:(d.opts||[]).map(function(o,i){return LETTERS[i]+'. '+o;}).join(' | '),'Right answer':d.right||(d.ans||[]).join(', '),'Your answer':d.mine||'',Reason:d.reason||'',Why:d.why||'',Fix:d.fix||'',Redo:redoStatus(d)};});
+  sheets['Quiz scores']=S.quant.filter(function(d){return d.kind==='quiz';}).sort(function(a,b){return (a.date||'')<(b.date||'')?-1:1;}).map(function(d){return {Date:d.date,Quiz:d.eom?'End-of-module':'Quiz',Topic:d.topic||'',Label:d.label||'',Correct:d.correct==null?'':d.correct,Total:d.total==null?'':d.total,'Score %':d.pct};});
+  sheets['Weak words']=S.words.slice().sort(function(a,b){return (b.misses||0)-(a.misses||0);}).map(function(w){var b=S.bank.get((w.word||'').toLowerCase())||{};return {Word:w.word,Meaning:w.meaning||b.m||'',Synonyms:w.syn||b.s||'','Times missed':w.misses||0,'Right in a row':w.box||0,Status:w.mastered?'Mastered':('Due '+(w.due||today()))};});
+  sheets['Daily checklist']=Object.keys(S.daily).sort().map(function(k){var v=S.daily[k]||{},r={Date:k};DAILY.forEach(function(x){r[x[1]]=v[x[0]]?'Done':'';});return r;});
+  return sheets;}
+function downloadExcel(btn){
+  if(btn)btn.disabled=true;toast('Preparing your Excel file…');
+  loadXlsx().then(function(){var sh=exportRows(),wb=XLSX.utils.book_new();
+    Object.keys(sh).forEach(function(n){var rows=sh[n].length?sh[n]:[{Note:'Nothing logged yet'}];var ws=XLSX.utils.json_to_sheet(rows);
+      var cols=Object.keys(rows[0]).map(function(k){var m=k.length;rows.forEach(function(r){var v=String(r[k]==null?'':r[k]);if(v.length>m)m=v.length;});return {wch:Math.min(60,Math.max(8,m+2))};});ws['!cols']=cols;XLSX.utils.book_append_sheet(wb,ws,n);});
+    XLSX.writeFile(wb,'GRE-prep-'+today()+'.xlsx');if(btn)btn.disabled=false;})
+  .catch(function(){if(btn)btn.disabled=false;toast('Could not prepare the Excel file here. Try the GitHub version of the app.');});}
+function exportCard(){var b=el('button',{class:'btn',type:'button'},'Download Excel');b.onclick=function(){downloadExcel(b);};
+  return el('div',{class:'card'},el('h2',{text:'Download my data'}),el('p',{class:'muted small',style:'margin:0',text:'One Excel file with separate sheets: summary and likely score, every section score, missed Quant and Verbal questions (with options, answers and redo status), quiz scores, weak words and your daily checklist.'}),el('div',null,b));}
 function renderDash(){
   var box=$('#dashBody');if(!box)return;box.textContent='';
   var dd=dashData(),V=wAcc(dd.v),Q=wAcc(dd.q),MIN=20;
   var vs=V.acc!=null&&V.n>=MIN?toScaled(V.acc):null,qs=Q.acc!=null&&Q.n>=MIN?toScaled(Q.acc):null;
+  box.append(exportCard());
   var proj=el('div',{class:'card'},el('h2',{text:'Projected GRE score'}));
   var grid=el('div',{class:'stat'});
   function tile(label,val,sub){return el('div',null,el('div',{class:'big',text:val}),el('div',{class:'muted small',text:label}),sub?el('div',{class:'muted small',text:sub}):null);}
