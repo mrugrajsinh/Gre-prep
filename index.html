@@ -440,10 +440,13 @@ function sectList(sec){
 var TESS_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',TESS_LANG='https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int';
 function loadTess(){if(window.Tesseract)return Promise.resolve();return new Promise(function(res,rej){var s=document.createElement('script');s.src=TESS_URL;s.onload=function(){res();};s.onerror=function(){rej(new Error('load'));};document.head.appendChild(s);});}
 function ocrClean(l){l=l.replace(/[^\x20-\x7E–—‘’“”√²³°×÷≤≥π]/g,' ').replace(/\s+/g,' ').trim();var letters=(l.match(/[A-Za-z0-9]/g)||[]).length;return letters?l:'';}
+function prepImage(file){return new Promise(function(res){var url=URL.createObjectURL(file),im=new Image();im.onload=function(){try{var sc=Math.min(3,Math.max(1,1800/Math.max(im.width,1))),w=Math.round(im.width*sc),h=Math.round(im.height*sc),cv=document.createElement('canvas');cv.width=w;cv.height=h;var cx=cv.getContext('2d');cx.drawImage(im,0,0,w,h);var d=cx.getImageData(0,0,w,h),p=d.data;for(var i=0;i<p.length;i+=4){var g=0.299*p[i]+0.587*p[i+1]+0.114*p[i+2],v=g<150?0:255;p[i]=p[i+1]=p[i+2]=v;}cx.putImageData(d,0,0);URL.revokeObjectURL(url);res(cv);}catch(e){URL.revokeObjectURL(url);res(file);}};im.onerror=function(){URL.revokeObjectURL(url);res(file);};im.src=url;});}
 function parseOcr(txt){
   var lines=txt.split(/\r?\n/).map(ocrClean).filter(Boolean);
   lines=lines.map(function(l){return l.replace(/(\w)\s+,/g,'$1 ____,').replace(/_{2,}/g,'____');});
   var r=parseOcrLettered(lines);if(r.opts.length>=2)return r;
+  var cand=[],rest=[];lines.forEach(function(l,i){if(i>0&&l.split(' ').length<=3&&!/[.,;:?!]/.test(l)&&!/____/.test(l)&&!/^quantity\s*[ab]$/i.test(l))cand.push(l);else rest.push(l);});
+  if(cand.length>=3&&rest.length)return {q:rest.join('\n'),opts:cand.slice(0,9)};
   var end=-1;for(var i=lines.length-1;i>=0;i--){if(/[.?!:]["”)]?$/.test(lines[i])||/____/.test(lines[i])){end=i;break;}}
   if(end>=0&&end<lines.length-1){var tail=lines.slice(end+1);if(tail.length>=2&&tail.length<=9&&tail.every(function(l){return l.split(' ').length<=8;}))return {q:lines.slice(0,end+1).join('\n'),opts:tail};}
   return {q:lines.join('\n'),opts:[]};}
@@ -458,7 +461,7 @@ function missForm(sec){
   var file=el('input',{type:'file',accept:'image/*'}),msg=el('p',{class:'muted small',style:'margin:0',text:st.msg||''});
   var qt=el('textarea',{rows:'5',placeholder:'Question text'});qt.value=st.q||'';qt.oninput=function(){st.q=qt.value;};
   file.onchange=function(){var f=file.files&&file.files[0];if(!f)return;st.msg='Reading the photo… (first time takes ~20 s)';msg.textContent=st.msg;
-    loadTess().then(function(){return window.Tesseract.recognize(f,'eng',{langPath:TESS_LANG,logger:function(m){if(m.status==='recognizing text'){msg.textContent='Reading… '+Math.round((m.progress||0)*100)+'%';}}});})
+    loadTess().then(function(){return prepImage(f);}).then(function(img){return window.Tesseract.recognize(img,'eng',{langPath:TESS_LANG,logger:function(m){if(m.status==='recognizing text'){msg.textContent='Reading… '+Math.round((m.progress||0)*100)+'%';}}});})
       .then(function(r){var p=parseOcr((r&&r.data&&r.data.text)||'');st.q=p.q;if(p.opts.length){st.opts=p.opts;while(st.opts.length<4)st.opts.push('');}st.ans={};st.msg='Done. Check the text and options below, fix anything misread (maths symbols often need fixing).';file.value='';renderEtsOnly(sec);})
       .catch(function(){st.msg='Could not read the photo here. Type the question and options instead.';msg.textContent=st.msg;});};
   c.append(el('label',null,'Photo or screenshot',file),msg,el('label',null,'Question',qt));
